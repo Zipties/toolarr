@@ -8,6 +8,10 @@ This server is built with FastAPI and is designed to be deployed as a Docker Swa
 
 ## Features
 
+### Quality Profile Management
+- **Get Quality Profiles:** List all available quality profiles for both Radarr and Sonarr instances.
+- **Automatic Profile Name Resolution:** Movie and TV show searches now include the quality profile name, eliminating the need for separate lookups.
+
 - **Multi-Instance Support:** Natively manage multiple Sonarr and Radarr instances from a single API. Perfect for separating 4K and 1080p libraries.
 - **Library Management:**
     - Find movies and series in your existing library.
@@ -82,6 +86,23 @@ RADARR_INSTANCE_1_API_KEY="your_radarr_api_key_here"
 
 ## Deployment
 
+### Using Pre-built Images
+
+Once published, you can use pre-built images instead of building locally:
+
+1. **From Docker Hub:**
+   ```yaml
+   # In docker-compose.yml, replace the build section with:
+   image: USERNAME/toolarr:latest
+   ```
+
+2. **From GitHub Container Registry:**
+   ```yaml
+   # In docker-compose.yml, replace the build section with:
+   image: ghcr.io/USERNAME/toolarr:latest
+   ```
+
+
 Toolarr is designed to be deployed as a Docker Swarm stack.
 
 1.  **Edit `docker-compose.yml`:** Open the `docker-compose.yml` file and change `traefik_public` to the name of the shared Docker network that your Sonarr and Radarr containers use.
@@ -117,6 +138,13 @@ To connect Toolarr to Open WebUI (or any other compatible tool):
 
 ### Example Prompts
 
+-   **Check quality profiles:**
+    > "What quality profile is assigned to Superman Returns?"
+    > *(The model will get both the quality profile ID and name in a single call)*
+
+-   **List all quality profiles:**
+    > "Show me all available quality profiles for movies in Radarr."
+
 You can now ask the model to perform actions for you.
 
 -   **Using the default instance:**
@@ -128,3 +156,33 @@ You can now ask the model to perform actions for you.
 
 -   **Deleting from the queue:**
     > "Get the Sonarr queue, then delete the item with ID 12345."
+
+---
+
+## Recent Updates
+
+### Enhanced Quality Profile Support
+- **Automatic Quality Profile Names**: When searching for movies or TV shows, the API now automatically includes the quality profile name alongside the ID. This eliminates the need for a second API call to look up quality profile names.
+- **Clearer API Descriptions**: Endpoints now clearly distinguish between Radarr (for movies) and Sonarr (for TV shows) to help AI assistants choose the correct service.
+
+### Environment Configuration
+- **No Quotes Required**: Environment variables in the `.env` file should not be wrapped in quotes. For example:
+  ```
+  RADARR_INSTANCE_1_URL=http://piflix_radarr:5051  # Correct
+  RADARR_INSTANCE_1_URL="http://piflix_radarr:5051"  # Incorrect - will cause errors
+  ```
+
+### Example API Responses
+
+When querying for a movie, you'll now see both the quality profile ID and name:
+```json
+{
+  "id": 864,
+  "title": "The Matrix",
+  "path": "/mnt/video/movies/The Matrix (1999)",
+  "qualityProfileId": 6,
+  "qualityProfileName": "HD - 720p/1080p (Web)",
+  ...
+}
+```
+

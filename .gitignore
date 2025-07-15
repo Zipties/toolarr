@@ -20,3 +20,17 @@ sonarr_filtered_logs.txt
 .vscode/
 .idea/
 *.swp
+
+# Backup files
+*.backup
+*.backup2
+*.bak
+
+# Environment files (be explicit)
+.env
+.env.*
+!.env.example
+
+# Temporary files
+*.tmp
+*~

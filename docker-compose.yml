@@ -2,8 +2,16 @@ version: '3.8'
 
 services:
   toolarr:
+    # Option 1: Use pre-built image from Docker Hub (replace USERNAME with actual Docker Hub username)
+    # image: USERNAME/toolarr:latest
+    
+    # Option 2: Use pre-built image from GitHub Container Registry
+    # image: ghcr.io/USERNAME/toolarr:latest
+    
+    # Option 3: Build locally (default)
     build: .
     image: toolarr:latest
+    
     env_file: .env
     networks:
       - traefik_public
@@ -17,8 +25,3 @@ services:
 networks:
   traefik_public:
     external: true
-
-    
-    
-    
-    

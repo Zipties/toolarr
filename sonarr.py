@@ -13,6 +13,7 @@ class Series(BaseModel):
     monitored: bool
     rootFolderPath: str
     qualityProfileId: int
+    qualityProfileName: Optional[str] = None
     languageProfileId: int
     tags: List[int] = []
     statistics: dict = {}
@@ -111,11 +112,25 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
 
-@router.get("/library", response_model=List[Series], summary="Find series in library")
+@router.get("/library", response_model=List[Series], summary="Find TV SHOW in Sonarr library (includes quality profile name)")
 async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches the existing Sonarr library to find details about a specific TV series that has already been added."""
+    """Searches the existing Sonarr library to find details about a specific TV series including its quality profile name. No need to separately query quality profiles."""
     all_series = await sonarr_api_call(instance, "series")
-    return [s for s in all_series if term.lower() in s.get("title", "").lower()]
+    
+    # Get quality profiles to map IDs to names
+    quality_profiles = await sonarr_api_call(instance, "qualityprofile")
+    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
+    
+    # Filter series and add quality profile name
+    filtered_series = []
+    for s in all_series:
+        if term.lower() in s.get("title", "").lower():
+            # Add quality profile name to the series object
+            if "qualityProfileId" in s:
+                s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
+            filtered_series.append(s)
+    
+    return filtered_series
 
 @router.put("/series/{sonarr_id}/move", response_model=Series, summary="Move series to new folder")
 async def move_series(sonarr_id: int, move_request: MoveSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
@@ -151,4 +166,45 @@ async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instan
     params = {"removeFromClient": str(removeFromClient).lower()}
     await sonarr_api_call(instance, f"queue/{queue_id}", method="DELETE", params=params)
     return
+
+class QualityProfile(BaseModel):
+    id: int
+    name: str
+
+class SeasonUpdateRequest(BaseModel):
+    seasonNumber: int
+    monitored: bool
+
+class UpdateSeriesRequest(BaseModel):
+    monitored: Optional[bool] = None
+    qualityProfileId: Optional[int] = None
+    seasons: Optional[List[SeasonUpdateRequest]] = None
+
+@router.put("/series/{series_id}", response_model=Series, summary="Update series properties")
+async def update_series(series_id: int, request: UpdateSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
+    """Updates properties of a specific series, such as monitoring status, quality profile, and per-season monitoring."""
+    # First, get the full series object
+    series_data = await sonarr_api_call(instance, f"series/{series_id}")
+
+    # Update top-level fields if they were provided
+    if request.monitored is not None:
+        series_data["monitored"] = request.monitored
+    if request.qualityProfileId is not None:
+        series_data["qualityProfileId"] = request.qualityProfileId
+
+    # Update per-season monitoring if provided
+    if request.seasons:
+        for season_update in request.seasons:
+            for season in series_data.get("seasons", []):
+                if season.get("seasonNumber") == season_update.seasonNumber:
+                    season["monitored"] = season_update.monitored
+                    break
+
+    # Send the updated object back to Sonarr
+    return await sonarr_api_call(instance, "series", method="PUT", json_data=series_data)
+
+@router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for TV SHOWS in Sonarr")
+async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
+    """Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
+    return await sonarr_api_call(instance, "qualityprofile")
 
