@@ -2,17 +2,11 @@ version: '3.8'
 
 services:
   toolarr:
-    # Build the image from the Dockerfile in the current directory
     build: .
-    # Name the image to be built
     image: toolarr:latest
-    # Load environment variables from a .env file
     env_file: .env
     networks:
-      # This network allows toolarr to communicate with your other services
-      # like sonarr and radarr using their service names as hostnames.
-      # Ensure this network is the same one your other services use.
-      - default_network # Replace with your actual shared network name, e.g., traefik_public
+      - traefik_public
     deploy:
       mode: global
       restart_policy:
@@ -21,7 +15,7 @@ services:
         max_attempts: 3
 
 networks:
-  default_network: # Replace with your actual shared network name
+  traefik_public:
     external: true
 
     
