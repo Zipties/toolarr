@@ -176,11 +176,12 @@ class SeasonUpdateRequest(BaseModel):
     monitored: bool
 
 class UpdateSeriesRequest(BaseModel):
-    monitored: Optional[bool] = None
-    qualityProfileId: Optional[int] = None
-    seasons: Optional[List[SeasonUpdateRequest]] = None
+    pass
 
-@router.put("/series/{series_id}", response_model=Series, summary="Update series properties")
+class UpdateTagsRequest(BaseModel):
+    tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the series")
+
+
 async def update_series(series_id: int, request: UpdateSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
     """Updates properties of a specific series, such as monitoring status, quality profile, and per-season monitoring."""
     # First, get the full series object
@@ -287,7 +288,7 @@ async def create_tag(
 @router.put("/series/{series_id}/tags", summary="Update tags for a series", operation_id="update_tags")
 async def update_series_tags(
     series_id: int,
-    tag_ids: List[int],
+    request: UpdateTagsRequest,
     instance_config: dict = Depends(get_sonarr_instance),
 ):
     """Update tags for a series. This replaces all existing tags."""
@@ -306,7 +307,7 @@ async def update_series_tags(
         
         # Update tags in series data
         series_data = series_response.json()
-        series_data["tags"] = tag_ids
+        series_data["tags"] = request.tag_ids
         
         # Send updated series data back
         update_response = await client.put(series_url, json=series_data, headers=headers)
