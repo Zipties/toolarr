@@ -13,6 +13,7 @@ class Movie(BaseModel):
     monitored: bool
     rootFolderPath: str
     qualityProfileId: int
+    qualityProfileName: Optional[str] = None
     tags: List[int] = []
     statistics: dict = {}
 
@@ -108,11 +109,25 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie], summary="Find movie in library")
+@router.get("/library", response_model=List[Movie], summary="Find MOVIE in Radarr library (includes quality profile name)")
 async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches the existing Radarr library to find details about a specific movie that has already been added."""
+    """Searches the existing Radarr library to find details about a specific movie including its quality profile name. No need to separately query quality profiles."""
     all_movies = await radarr_api_call(instance, "movie")
-    return [m for m in all_movies if term.lower() in m.get("title", "").lower()]
+    
+    # Get quality profiles to map IDs to names
+    quality_profiles = await radarr_api_call(instance, "qualityprofile")
+    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
+    
+    # Filter movies and add quality profile name
+    filtered_movies = []
+    for m in all_movies:
+        if term.lower() in m.get("title", "").lower():
+            # Add quality profile name to the movie object
+            if "qualityProfileId" in m:
+                m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
+            filtered_movies.append(m)
+    
+    return filtered_movies
 
 @router.put("/movie/{movie_id}/move", response_model=Movie, summary="Move movie to new folder")
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
@@ -163,4 +178,32 @@ async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instan
     params = {"removeFromClient": str(removeFromClient).lower()}
     await radarr_api_call(instance, f"queue/{queue_id}", method="DELETE", params=params)
     return
+
+class QualityProfile(BaseModel):
+    id: int
+    name: str
+
+class UpdateMovieRequest(BaseModel):
+    monitored: Optional[bool] = None
+    qualityProfileId: Optional[int] = None
+
+@router.put("/movie/{movie_id}", response_model=Movie, summary="Update movie properties")
+async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
+    """Updates properties of a specific movie, such as monitoring status or quality profile."""
+    # First, get the full movie object
+    movie_data = await radarr_api_call(instance, f"movie/{movie_id}")
+
+    # Update fields if they were provided in the request
+    if request.monitored is not None:
+        movie_data["monitored"] = request.monitored
+    if request.qualityProfileId is not None:
+        movie_data["qualityProfileId"] = request.qualityProfileId
+
+    # Send the updated object back to Radarr
+    return await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
+
+@router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for movies in Radarr")
+async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
+    """Retrieves quality profiles for MOVIES configured in Radarr. Only needed when managing quality profiles directly, not for checking a movie's quality profile."""
+    return await radarr_api_call(instance, "qualityprofile")
 

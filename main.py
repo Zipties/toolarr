@@ -3,8 +3,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from sonarr import router as sonarr_router
-from radarr import router as radarr_router
+from sonarr import router as sonarr_router, load_sonarr_instances
+from radarr import router as radarr_router, load_radarr_instances
 
 # --- App Initialization ---
 app = FastAPI(
@@ -39,6 +39,12 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
 # Include the Sonarr and Radarr routers, with security dependency
 app.include_router(sonarr_router, dependencies=[Depends(verify_api_key)])
 app.include_router(radarr_router, dependencies=[Depends(verify_api_key)])
+
+# --- Startup Event ---
+@app.on_event("startup")
+async def startup_event():
+    load_sonarr_instances()
+    load_radarr_instances()
 
 # --- Root Endpoint ---
 @app.get("/", summary="Health check")
