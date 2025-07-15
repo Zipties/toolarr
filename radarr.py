@@ -25,7 +25,7 @@ class QueueItem(BaseModel):
     id: int
     movieId: int
     title: str
-    status: str
+    status: Optional[str] = None
     protocol: str
     size: float
     timeLeft: Optional[str] = None
@@ -40,7 +40,7 @@ class HistoryItem(BaseModel):
     movieId: int
     sourceTitle: str
     eventType: str
-    status: str
+    status: Optional[str] = None
     date: str
 
 # Radarr API Router
