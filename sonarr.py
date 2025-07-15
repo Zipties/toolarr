@@ -69,20 +69,32 @@ def load_sonarr_instances():
         i += 1
 
 def get_sonarr_instance(instance_name: str):
-    """Dependency to get a Sonarr instance's config. Handles 'default' keyword."""
+    """Dependency to get a Sonarr instance's config. Handles 'default' keyword and case-insensitive matching."""
     if not SONARR_INSTANCES:
         load_sonarr_instances()
     
-    if instance_name == "default":
+    # Handle 'default' keyword
+    if instance_name.lower() == "default":
         if not SONARR_INSTANCES:
             raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
         # Return the first configured instance
         return next(iter(SONARR_INSTANCES.values()))
 
+    # Try exact match first
     instance = SONARR_INSTANCES.get(instance_name)
-    if not instance:
-        raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found.")
-    return instance
+    if instance:
+        return instance
+    
+    # Try case-insensitive match
+    for name, config in SONARR_INSTANCES.items():
+        if name.lower() == instance_name.lower():
+            return config
+    
+    # If no match found, try to use first instance as default
+    if SONARR_INSTANCES:
+        return next(iter(SONARR_INSTANCES.values()))
+    
+    raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found.")
 
 async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Sonarr instance."""
