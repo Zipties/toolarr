@@ -69,15 +69,10 @@ def load_sonarr_instances():
         i += 1
 
 def get_sonarr_instance(instance_name: str):
-    """Dependency to get a Sonarr instance's config. Handles 'default' keyword."""
+    """Dependency to get a Sonarr instance configuration."""
     if not SONARR_INSTANCES:
         load_sonarr_instances()
     
-    if instance_name == "default":
-        if not SONARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
-        # Return the first configured instance
-        return next(iter(SONARR_INSTANCES.values()))
 
     instance = SONARR_INSTANCES.get(instance_name)
     if not instance:
@@ -208,3 +203,74 @@ async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
     """Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
     return await sonarr_api_call(instance, "qualityprofile")
 
+# Tag endpoints for sonarr.py
+
+@router.get("/tags", summary="Get all tags from Sonarr")
+async def get_tags(
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Get all tags configured in Sonarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch tags: {response.text}"
+        )
+    
+    return response.json()
+
+@router.post("/tags", summary="Create a new tag in Sonarr")
+async def create_tag(
+    label: str,
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Create a new tag in Sonarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    payload = {"label": label}
+    
+    response = requests.post(url, json=payload, headers=headers)
+    
+    if response.status_code != 201:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to create tag: {response.text}"
+        )
+    
+    return response.json()
+
+@router.put("/series/{series_id}/tags", summary="Add tags to a series")
+async def add_tags_to_series(
+    series_id: int,
+    tag_ids: List[int],
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Add tags to a series. This replaces all existing tags."""
+    # First get the series
+    series_url = f"{instance_config['url']}/api/v3/series/{series_id}"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    series_response = requests.get(series_url, headers=headers)
+    if series_response.status_code != 200:
+        raise HTTPException(
+            status_code=series_response.status_code,
+            detail=f"Series not found: {series_response.text}"
+        )
+    
+    series_data = series_response.json()
+    series_data["tags"] = tag_ids
+    
+    # Update the series
+    update_response = requests.put(series_url, json=series_data, headers=headers)
+    
+    if update_response.status_code != 202:
+        raise HTTPException(
+            status_code=update_response.status_code,
+            detail=f"Failed to update series tags: {update_response.text}"
+        )
+    
+    return update_response.json()

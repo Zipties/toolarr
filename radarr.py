@@ -64,15 +64,10 @@ def load_radarr_instances():
         i += 1
 
 def get_radarr_instance(instance_name: str):
-    """Dependency to get a Radarr instance's config. Handles 'default' keyword."""
+    """Dependency to get a Radarr instance configuration."""
     if not RADARR_INSTANCES:
         load_radarr_instances()
 
-    if instance_name == "default":
-        if not RADARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Radarr instances configured.")
-        # Return the first configured instance
-        return next(iter(RADARR_INSTANCES.values()))
 
     instance = RADARR_INSTANCES.get(instance_name)
     if not instance:
@@ -207,3 +202,74 @@ async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
     """Retrieves quality profiles for MOVIES configured in Radarr. Only needed when managing quality profiles directly, not for checking a movie's quality profile."""
     return await radarr_api_call(instance, "qualityprofile")
 
+# Tag endpoints for radarr.py
+
+@router.get("/tags", summary="Get all tags from Radarr")
+async def get_tags(
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Get all tags configured in Radarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch tags: {response.text}"
+        )
+    
+    return response.json()
+
+@router.post("/tags", summary="Create a new tag in Radarr")
+async def create_tag(
+    label: str,
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Create a new tag in Radarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    payload = {"label": label}
+    
+    response = requests.post(url, json=payload, headers=headers)
+    
+    if response.status_code != 201:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to create tag: {response.text}"
+        )
+    
+    return response.json()
+
+@router.put("/movie/{movie_id}/tags", summary="Add tags to a movie")
+async def add_tags_to_movie(
+    movie_id: int,
+    tag_ids: List[int],
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Add tags to a movie. This replaces all existing tags."""
+    # First get the movie
+    movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    movie_response = requests.get(movie_url, headers=headers)
+    if movie_response.status_code != 200:
+        raise HTTPException(
+            status_code=movie_response.status_code,
+            detail=f"Movie not found: {movie_response.text}"
+        )
+    
+    movie_data = movie_response.json()
+    movie_data["tags"] = tag_ids
+    
+    # Update the movie
+    update_response = requests.put(movie_url, json=movie_data, headers=headers)
+    
+    if update_response.status_code != 202:
+        raise HTTPException(
+            status_code=update_response.status_code,
+            detail=f"Failed to update movie tags: {update_response.text}"
+        )
+    
+    return update_response.json()
