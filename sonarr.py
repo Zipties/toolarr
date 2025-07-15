@@ -225,7 +225,7 @@ async def get_tag_map(instance_config: dict) -> dict:
     return {tag['id']: tag['label'] for tag in tags}
 
 # Update the library search to include tag names
-@router.get("/library/with-tags", summary="Find TV SHOW with tag names")
+@router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="find_series_with_tags")
 async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
     """Searches library and includes tag names instead of just IDs."""
     all_series = await sonarr_api_call(instance, "series")
