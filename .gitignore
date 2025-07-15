@@ -1,0 +1,22 @@
+# Environment variables
+.env*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Docker
+docker-compose.override.yml
+
+# Build artifacts
+*.tar
+*.tar.gz
+
+# Logs
+*.log
+sonarr_filtered_logs.txt
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,16 @@
+services:
+  sonarr-api:
+    image: sonarr-tool-server:v9
+    build: .
+    environment:
+      - TOOL_API_KEY=b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0
+      - SONARR_URL=http://piflix_sonarr:8082
+      - SONARR_API_KEY=7ce61d72c943483ca03864e03f013127
+    networks:
+      - traefik_public
+    deploy:
+      mode: global
+
+networks:
+  traefik_public:
+    external: true
