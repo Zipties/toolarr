@@ -49,6 +49,29 @@ router = APIRouter(
 )
 
 # In-memory cache for instance configurations
+def get_radarr_instance(instance_name: str):
+    """Dependency to get a Radarr instance configuration."""
+    if not RADARR_INSTANCES:
+        load_radarr_instances()
+    
+    # Direct match first
+    instance = RADARR_INSTANCES.get(instance_name)
+    if instance:
+        return instance
+    
+    # If "default" is requested or instance not found, return the first instance
+    if instance_name.lower() == "default" or instance_name.lower() == "radarr":
+        if not RADARR_INSTANCES:
+            raise HTTPException(status_code=404, detail="No Radarr instances configured.")
+        # Return the first configured instance as default
+        return next(iter(RADARR_INSTANCES.values()))
+    
+    # Case-insensitive match
+    for name, config in RADARR_INSTANCES.items():
+        if name.lower() == instance_name.lower():
+            return config
+    
+    raise HTTPException(status_code=404, detail=f"Radarr instance '{instance_name}' not found. Available instances: {list(RADARR_INSTANCES.keys())}")
 RADARR_INSTANCES = {}
 
 def load_radarr_instances():
@@ -63,16 +86,6 @@ def load_radarr_instances():
         RADARR_INSTANCES[name] = {"url": url, "api_key": api_key}
         i += 1
 
-def get_radarr_instance(instance_name: str):
-    """Dependency to get a Radarr instance configuration."""
-    if not RADARR_INSTANCES:
-        load_radarr_instances()
-
-
-    instance = RADARR_INSTANCES.get(instance_name)
-    if not instance:
-        raise HTTPException(status_code=404, detail=f"Radarr instance '{instance_name}' not found.")
-    return instance
 
 async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Radarr instance."""
@@ -202,7 +215,7 @@ async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
     """Retrieves quality profiles for MOVIES configured in Radarr. Only needed when managing quality profiles directly, not for checking a movie's quality profile."""
     return await radarr_api_call(instance, "qualityprofile")
 
-# Tag endpoints for radarr.py
+# Tag endpoints for Radarr following API v3 spec
 
 @router.get("/tags", summary="Get all tags from Radarr")
 async def get_tags(
@@ -212,7 +225,8 @@ async def get_tags(
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
-    response = requests.get(url, headers=headers)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
     
     if response.status_code != 200:
         raise HTTPException(
@@ -232,7 +246,8 @@ async def create_tag(
     headers = {"X-Api-Key": instance_config["api_key"]}
     payload = {"label": label}
     
-    response = requests.post(url, json=payload, headers=headers)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
     
     if response.status_code != 201:
         raise HTTPException(
@@ -242,34 +257,37 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Add tags to a movie")
-async def add_tags_to_movie(
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie")
+async def update_movie_tags(
     movie_id: int,
     tag_ids: List[int],
     instance_config: dict = Depends(get_radarr_instance),
 ):
-    """Add tags to a movie. This replaces all existing tags."""
-    # First get the movie
+    """Update tags for a movie. This replaces all existing tags."""
+    # First get the current movie data
     movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
-    movie_response = requests.get(movie_url, headers=headers)
-    if movie_response.status_code != 200:
-        raise HTTPException(
-            status_code=movie_response.status_code,
-            detail=f"Movie not found: {movie_response.text}"
-        )
-    
-    movie_data = movie_response.json()
-    movie_data["tags"] = tag_ids
-    
-    # Update the movie
-    update_response = requests.put(movie_url, json=movie_data, headers=headers)
-    
-    if update_response.status_code != 202:
-        raise HTTPException(
-            status_code=update_response.status_code,
-            detail=f"Failed to update movie tags: {update_response.text}"
-        )
-    
-    return update_response.json()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Get current movie data
+        movie_response = await client.get(movie_url, headers=headers)
+        if movie_response.status_code != 200:
+            raise HTTPException(
+                status_code=movie_response.status_code,
+                detail=f"Movie not found: {movie_response.text}"
+            )
+        
+        # Update tags in movie data
+        movie_data = movie_response.json()
+        movie_data["tags"] = tag_ids
+        
+        # Send updated movie data back
+        update_response = await client.put(movie_url, json=movie_data, headers=headers)
+        
+        if update_response.status_code not in [200, 202]:
+            raise HTTPException(
+                status_code=update_response.status_code,
+                detail=f"Failed to update movie tags: {update_response.text}"
+            )
+        
+        return update_response.json()
