@@ -225,7 +225,7 @@ async def get_tag_map(instance_config: dict) -> dict:
     return {tag['id']: tag['label'] for tag in tags}
 
 # Update the library search to include tag names
-@router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="find_series_with_tags")
+@router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="series_with_tags")
 async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
     """Searches library and includes tag names instead of just IDs."""
     all_series = await sonarr_api_call(instance, "series")
@@ -242,3 +242,79 @@ async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_i
             filtered_series.append(s)
     
     return filtered_series
+
+# Tag management endpoints
+@router.get("/tags", summary="Get all tags from Sonarr", operation_id="get_tags")
+async def get_tags(
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Get all tags configured in Sonarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch tags: {response.text}"
+        )
+    
+    return response.json()
+
+@router.post("/tags", summary="Create a new tag in Sonarr", operation_id="create_tag")
+async def create_tag(
+    label: str,
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Create a new tag in Sonarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    payload = {"label": label}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+    
+    if response.status_code != 201:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to create tag: {response.text}"
+        )
+    
+    return response.json()
+
+@router.put("/series/{series_id}/tags", summary="Update tags for a series", operation_id="update_tags")
+async def update_series_tags(
+    series_id: int,
+    tag_ids: List[int],
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Update tags for a series. This replaces all existing tags."""
+    # First get the current series data
+    series_url = f"{instance_config['url']}/api/v3/series/{series_id}"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Get current series data
+        series_response = await client.get(series_url, headers=headers)
+        if series_response.status_code != 200:
+            raise HTTPException(
+                status_code=series_response.status_code,
+                detail=f"Series not found: {series_response.text}"
+            )
+        
+        # Update tags in series data
+        series_data = series_response.json()
+        series_data["tags"] = tag_ids
+        
+        # Send updated series data back
+        update_response = await client.put(series_url, json=series_data, headers=headers)
+        
+        if update_response.status_code not in [200, 202]:
+            raise HTTPException(
+                status_code=update_response.status_code,
+                detail=f"Failed to update series tags: {update_response.text}"
+            )
+        
+        return update_response.json()

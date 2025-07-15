@@ -257,7 +257,7 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_movie_tags")
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_tags_old")
 async def update_movie_tags(
     movie_id: int,
     tag_ids: List[int],
@@ -308,7 +308,7 @@ async def get_tag_map(instance_config: dict) -> dict:
     return {tag['id']: tag['label'] for tag in tags}
 
 # Update the library search to include tag names
-@router.get("/library/with-tags", summary="Find movies with tag names", operation_id="find_movies_with_tags")
+@router.get("/library/with-tags", summary="Find movies with tag names", operation_id="movies_with_tags")
 async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_instance)):
     """Searches library and includes tag names instead of just IDs."""
     all_movies = await radarr_api_call(instance, "movie")
@@ -325,3 +325,79 @@ async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_i
             filtered_movies.append(m)
     
     return filtered_movies
+
+# Tag management endpoints
+@router.get("/tags", summary="Get all tags from Radarr", operation_id="get_tags")
+async def get_tags(
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Get all tags configured in Radarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch tags: {response.text}"
+        )
+    
+    return response.json()
+
+@router.post("/tags", summary="Create a new tag in Radarr", operation_id="create_tag") 
+async def create_tag(
+    label: str,
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Create a new tag in Radarr."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    payload = {"label": label}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+    
+    if response.status_code != 201:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to create tag: {response.text}"
+        )
+    
+    return response.json()
+
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_tags")
+async def update_movie_tags(
+    movie_id: int,
+    tag_ids: List[int],
+    instance_config: dict = Depends(get_radarr_instance),
+):
+    """Update tags for a movie. This replaces all existing tags."""
+    # First get the current movie data
+    movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Get current movie data
+        movie_response = await client.get(movie_url, headers=headers)
+        if movie_response.status_code != 200:
+            raise HTTPException(
+                status_code=movie_response.status_code,
+                detail=f"Movie not found: {movie_response.text}"
+            )
+        
+        # Update tags in movie data
+        movie_data = movie_response.json()
+        movie_data["tags"] = tag_ids
+        
+        # Send updated movie data back
+        update_response = await client.put(movie_url, json=movie_data, headers=headers)
+        
+        if update_response.status_code not in [200, 202]:
+            raise HTTPException(
+                status_code=update_response.status_code,
+                detail=f"Failed to update movie tags: {update_response.text}"
+            )
+        
+        return update_response.json()
