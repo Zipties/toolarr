@@ -291,3 +291,37 @@ async def update_movie_tags(
             )
         
         return update_response.json()
+
+# Helper function to get tag map
+async def get_tag_map(instance_config: dict) -> dict:
+    """Get a mapping of tag IDs to tag names."""
+    url = f"{instance_config['url']}/api/v3/tag"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        return {}
+    
+    tags = response.json()
+    return {tag['id']: tag['label'] for tag in tags}
+
+# Update the library search to include tag names
+@router.get("/library/with-tags", summary="Find movies with tag names")
+async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_instance)):
+    """Searches library and includes tag names instead of just IDs."""
+    all_movies = await radarr_api_call(instance, "movie")
+    tag_map = await get_tag_map(instance)
+    
+    filtered_movies = []
+    for m in all_movies:
+        if term.lower() in m.get("title", "").lower():
+            # Add tag names
+            if "tags" in m and m["tags"]:
+                m["tagNames"] = [tag_map.get(tag_id, f"Unknown tag {tag_id}") for tag_id in m["tags"]]
+            else:
+                m["tagNames"] = []
+            filtered_movies.append(m)
+    
+    return filtered_movies
