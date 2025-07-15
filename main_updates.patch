@@ -1,0 +1,25 @@
+--- main.py.old
++++ main.py
+@@ -234,7 +234,7 @@
+          summary="Get specific series details",
+          response_model=SeriesDetail,
+          dependencies=[Depends(verify_token)])
+ async def get_series(series_id: int):
+-    """Get detailed information about a specific series"""
++    """Get detailed information about a specific series including tags, quality profile, and root folder"""
+ 
+@@ -467,7 +467,7 @@
+          summary="Get missing episodes",
+          response_model=List[MissingEpisode],
+          dependencies=[Depends(verify_token)])
+ async def get_missing_episodes(
+-    """Get list of missing episodes"""
++    """Get list of missing/wanted episodes that haven't been downloaded yet"""
+ 
+@@ -506,7 +506,7 @@
+          summary="List all tags",
+          response_model=List[TagModel],
+          dependencies=[Depends(verify_token)])
+ async def list_tags():
+-    """Get all tags"""
++    """Get all available tags in the system"""

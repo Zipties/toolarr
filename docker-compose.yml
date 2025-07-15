@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  toolarr:
+    image: 192.168.45.15:5000/toolarr:latest
+    environment:
+      # --- General ---
+      TOOL_API_KEY: b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0
+
+      # --- Sonarr Instance 1 ---
+      SONARR_INSTANCE_1_NAME: "sonarr"
+      SONARR_INSTANCE_1_URL: "http://piflix_sonarr:8082"
+      SONARR_INSTANCE_1_API_KEY: "7ce61d72c943483ca03864e03f013127"
+
+      # --- Radarr Instance 1 ---
+      RADARR_INSTANCE_1_NAME: "radarr"
+      RADARR_INSTANCE_1_URL: "http://piflix_radarr:5051"
+      RADARR_INSTANCE_1_API_KEY: "d81da54eab704db0aa2d4e1d66cd697a"
+    networks:
+      - traefik_public
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+networks:
+  traefik_public:
+    external: true
+
+    
+    
+    
+    
