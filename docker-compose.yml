@@ -2,19 +2,28 @@ version: '3.8'
 
 services:
   toolarr:
-    # Option 1: Use pre-built image from Docker Hub (replace USERNAME with actual Docker Hub username)
-    # image: USERNAME/toolarr:latest
+    image: ghcr.io/zipties/toolarr:master
     
-    # Option 2: Use pre-built image from GitHub Container Registry
-    # image: ghcr.io/USERNAME/toolarr:latest
-    
-    # Option 3: Build locally (default)
-    build: .
-    image: toolarr:latest
-    
+    # Option 1: Use environment variables from .env file (recommended)
     env_file: .env
+    
+    # Option 2: Define environment variables inline (uncomment and modify)
+    # environment:
+    #   TOOL_API_KEY: ${TOOL_API_KEY:-changeme}
+    #   SONARR_INSTANCE_1_NAME: ${SONARR_INSTANCE_1_NAME:-sonarr}
+    #   SONARR_INSTANCE_1_URL: ${SONARR_INSTANCE_1_URL:-http://sonarr:8989}
+    #   SONARR_INSTANCE_1_API_KEY: ${SONARR_INSTANCE_1_API_KEY}
+    #   RADARR_INSTANCE_1_NAME: ${RADARR_INSTANCE_1_NAME:-radarr}
+    #   RADARR_INSTANCE_1_URL: ${RADARR_INSTANCE_1_URL:-http://radarr:7878}
+    #   RADARR_INSTANCE_1_API_KEY: ${RADARR_INSTANCE_1_API_KEY}
+    
+    # Uncomment to expose the service directly (not needed if using Traefik)
+    # ports:
+    #   - "8000:8000"
+    
     networks:
       - traefik_public
+      
     deploy:
       mode: global
       restart_policy:

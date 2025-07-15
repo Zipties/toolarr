@@ -1,189 +1,112 @@
-# Toolarr: Sonarr & Radarr API Tool Server
+# Toolarr: Sonarr & Radarr API Bridge for AI
 
-Toolarr is a powerful, self-hosted API server designed to act as a bridge between AI language models (like those in Open WebUI) and your Sonarr and Radarr instances. It exposes a clean, tool-friendly OpenAPI schema that allows you to manage your media library using natural language.
+Toolarr exposes a clean, tool-friendly API that allows AI assistants (like Open WebUI) to manage your Sonarr and Radarr media libraries using natural language.
 
-This server is built with FastAPI and is designed to be deployed as a Docker Swarm service, allowing for robust, multi-instance management of your media servers.
+##  Quick Start (2 minutes)
 
----
+```bash
+# Download the docker-compose file
+wget https://raw.githubusercontent.com/Zipties/toolarr/master/docker-compose.yml
 
-## Features
+# Create your configuration
+cat > .env << 'EOL'
+TOOL_API_KEY=your_secret_api_key_here
+SONARR_INSTANCE_1_NAME=sonarr
+SONARR_INSTANCE_1_URL=http://sonarr:8989
+SONARR_INSTANCE_1_API_KEY=your_sonarr_api_key
+RADARR_INSTANCE_1_NAME=radarr
+RADARR_INSTANCE_1_URL=http://radarr:7878
+RADARR_INSTANCE_1_API_KEY=your_radarr_api_key
+EOL
+
+# Deploy to Docker Swarm
+docker stack deploy -c docker-compose.yml toolarr
+```
+
+That's it! Toolarr is now running.
+
+##  Configuration
+
+### Minimal Configuration
+You only need to provide:
+- `TOOL_API_KEY`: A secret key to protect your API (generate with `openssl rand -hex 32`)
+- Your Sonarr/Radarr URLs and API keys
+
+### Service Names
+Use the Docker service names for reliable communication within your stack:
+- If Sonarr is deployed as `media_sonarr`, use `http://media_sonarr:8989`
+- If Radarr is deployed as `media_radarr`, use `http://media_radarr:7878`
+
+### Multiple Instances
+Add more instances by incrementing the number:
+```env
+SONARR_INSTANCE_2_NAME=sonarr-4k
+SONARR_INSTANCE_2_URL=http://sonarr-4k:8989
+SONARR_INSTANCE_2_API_KEY=your_4k_api_key
+```
+
+##  Connect to Open WebUI
+
+1. In Open WebUI, go to **Tools** → **Add Tool**
+2. Enter the OpenAPI URL: `http://toolarr:8000/openapi.json`
+3. Set authentication:
+   - Type: **Bearer Token**
+   - Token: Your `TOOL_API_KEY`
+
+##  Features
 
 ### Quality Profile Management
-- **Get Quality Profiles:** List all available quality profiles for both Radarr and Sonarr instances.
-- **Automatic Profile Name Resolution:** Movie and TV show searches now include the quality profile name, eliminating the need for separate lookups.
+- **Automatic Profile Names**: When searching for content, quality profile names are included automatically
+- **Clear Service Distinction**: API clearly separates movie (Radarr) and TV show (Sonarr) operations
 
-- **Multi-Instance Support:** Natively manage multiple Sonarr and Radarr instances from a single API. Perfect for separating 4K and 1080p libraries.
-- **Library Management:**
-    - Find movies and series in your existing library.
-    - Move the file paths of movies and series between different root folders.
-- **Queue Management:**
-    - View the current download queue for any instance.
-    - View the download history for any instance.
-    - Delete items from the download queue (and optionally from the download client).
-- **Intelligent by Default:** Includes a "default" instance fallback, making it easy to use with LLMs that may not specify an instance name for every call.
-- **Secure:** Protected by a secret API key to prevent unauthorized access.
-- **Dockerized for Swarm:** Designed to run as a global service in a Docker Swarm environment, ensuring high availability and simple deployment.
+### Library Management
+- Search for movies and TV shows
+- View quality profiles
+- Move content between folders
+- Update series monitoring
 
----
+### Queue Management
+- View download queues
+- Check download history
+- Delete items from queue
 
-## Requirements
+## 💬 Example Prompts
 
-- Docker
-- Docker Swarm initialized on your host(s)
-- A shared Docker network that both `toolarr` and your Sonarr/Radarr services are connected to.
+Once connected to your AI assistant:
 
----
+- "What quality profile is assigned to The Matrix?"
+- "Show me the Sonarr download queue"
+- "Find all movies with the '4K' quality profile"
+- "Delete the stuck download for Breaking Bad"
 
-## Setup & Configuration
+##  Docker Image
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/Zipties/toolarr.git
-cd toolarr
+Pre-built images are available:
+```yaml
+# In docker-compose.yml
+image: ghcr.io/zipties/toolarr:master
 ```
 
-### 2. Configure Your Instances
+## 🔒 Security
 
-Toolarr is configured using environment variables. A template is provided in `.env.example`.
+- All endpoints require Bearer token authentication
+- API keys are never exposed in responses
+- Supports multiple isolated instances
 
-First, copy the example file to create your own personal configuration:
+## 📦 Requirements
 
-```bash
-cp .env.example .env
-```
+- Docker with Swarm mode initialized
+- Network connectivity to your Sonarr/Radarr instances
+- Shared Docker network (e.g., `traefik_public`)
 
-Now, open the `.env` file in a text editor and fill in your specific values.
+## 🛠 Advanced Configuration
 
-```dotenv
-# .env
+See [CONFIGURATION.md](CONFIGURATION.md) for:
+- Building from source
+- Custom network setups
+- Development setup
+- Troubleshooting
 
-# A secret key for your tool server. Generate one with: openssl rand -hex 32
-TOOL_API_KEY=your_secret_api_key_here
+## 📄 License
 
-# --- Sonarr Instance 1 ---
-# A friendly name for this instance, used in the API URL.
-SONARR_INSTANCE_1_NAME="sonarr"
-# The full URL to your Sonarr instance's API.
-# Use the Docker service name for reliable communication within the Swarm.
-SONARR_INSTANCE_1_URL="http://piflix_sonarr:8082"
-# Your Sonarr API key.
-SONARR_INSTANCE_1_API_KEY="your_sonarr_api_key_here"
-
-# --- Radarr Instance 1 ---
-RADARR_INSTANCE_1_NAME="radarr"
-RADARR_INSTANCE_1_URL="http://piflix_radarr:5051"
-RADARR_INSTANCE_1_API_KEY="your_radarr_api_key_here"
-
-# --- Add More Instances (Optional) ---
-# To add more, just increment the number (e.g., SONARR_INSTANCE_2_...).
-# SONARR_INSTANCE_2_NAME="sonarr-4k"
-# SONARR_INSTANCE_2_URL="http://piflix_sonarr4k:8082"
-# SONARR_INSTANCE_2_API_KEY="your_sonarr_4k_api_key_here"
-```
-
----
-
-## Deployment
-
-### Using Pre-built Images
-
-Once published, you can use pre-built images instead of building locally:
-
-1. **From Docker Hub:**
-   ```yaml
-   # In docker-compose.yml, replace the build section with:
-   image: USERNAME/toolarr:latest
-   ```
-
-2. **From GitHub Container Registry:**
-   ```yaml
-   # In docker-compose.yml, replace the build section with:
-   image: ghcr.io/USERNAME/toolarr:latest
-   ```
-
-
-Toolarr is designed to be deployed as a Docker Swarm stack.
-
-1.  **Edit `docker-compose.yml`:** Open the `docker-compose.yml` file and change `traefik_public` to the name of the shared Docker network that your Sonarr and Radarr containers use.
-
-2.  **Build the Image:**
-    ```bash
-    docker build -t toolarr:latest .
-    ```
-    *(Note: For multi-node Swarms, you must make this image available on all nodes, either by pushing to a registry or using the `docker save`/`docker load` method.)*
-
-3.  **Deploy the Stack:**
-    ```bash
-    docker stack deploy -c docker-compose.yml toolarr
-    ```
-    This will deploy the `toolarr` service globally to all nodes in your Swarm.
-
----
-
-## Usage with Open WebUI
-
-To connect Toolarr to Open WebUI (or any other compatible tool):
-
-1.  **Go to the Tools section in Open WebUI.**
-2.  **Add a new tool and provide the OpenAPI schema URL:**
-
-    **`http://toolarr_toolarr:8000/openapi.json`**
-
-    *(This URL uses Docker's internal DNS: `<stack_name>_<service_name>:<internal_port>`)*
-
-3.  **Set the Authentication:**
-    -   **Auth Type:** `Bearer Token`
-    -   **Token:** The `TOOL_API_KEY` you set in your `.env` file.
-
-### Example Prompts
-
--   **Check quality profiles:**
-    > "What quality profile is assigned to Superman Returns?"
-    > *(The model will get both the quality profile ID and name in a single call)*
-
--   **List all quality profiles:**
-    > "Show me all available quality profiles for movies in Radarr."
-
-You can now ask the model to perform actions for you.
-
--   **Using the default instance:**
-    > "Show me the current download queue for Sonarr."
-    > *(The model will likely use `instance_name: "default"`, and Toolarr will correctly use your first configured Sonarr instance.)*
-
--   **Specifying a named instance:**
-    > "Using toolarr, find the movie 'The Matrix' on the **radarr** instance."
-
--   **Deleting from the queue:**
-    > "Get the Sonarr queue, then delete the item with ID 12345."
-
----
-
-## Recent Updates
-
-### Enhanced Quality Profile Support
-- **Automatic Quality Profile Names**: When searching for movies or TV shows, the API now automatically includes the quality profile name alongside the ID. This eliminates the need for a second API call to look up quality profile names.
-- **Clearer API Descriptions**: Endpoints now clearly distinguish between Radarr (for movies) and Sonarr (for TV shows) to help AI assistants choose the correct service.
-
-### Environment Configuration
-- **No Quotes Required**: Environment variables in the `.env` file should not be wrapped in quotes. For example:
-  ```
-  RADARR_INSTANCE_1_URL=http://piflix_radarr:5051  # Correct
-  RADARR_INSTANCE_1_URL="http://piflix_radarr:5051"  # Incorrect - will cause errors
-  ```
-
-### Example API Responses
-
-When querying for a movie, you'll now see both the quality profile ID and name:
-```json
-{
-  "id": 864,
-  "title": "The Matrix",
-  "path": "/mnt/video/movies/The Matrix (1999)",
-  "qualityProfileId": 6,
-  "qualityProfileName": "HD - 720p/1080p (Web)",
-  ...
-}
-```
-
-# Public repository
+MIT License - see [LICENSE](LICENSE) for details
