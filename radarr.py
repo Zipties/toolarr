@@ -18,6 +18,7 @@ class Movie(BaseModel):
     statistics: dict = {}
 
 class MoveMovieRequest(BaseModel):
+    pass
     rootFolderPath: str = Field(..., description="The new root folder path for the movie.")
 
 class QueueItem(BaseModel):
@@ -192,10 +193,12 @@ class QualityProfile(BaseModel):
     name: str
 
 class UpdateMovieRequest(BaseModel):
-    monitored: Optional[bool] = None
-    qualityProfileId: Optional[int] = None
+    pass
 
-@router.put("/movie/{movie_id}", response_model=Movie, summary="Update movie properties")
+class UpdateTagsRequest(BaseModel):
+    tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the movie")
+
+
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Updates properties of a specific movie, such as monitoring status or quality profile."""
     # First, get the full movie object
@@ -257,40 +260,6 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_tags_old")
-async def update_movie_tags(
-    movie_id: int,
-    tag_ids: List[int],
-    instance_config: dict = Depends(get_radarr_instance),
-):
-    """Update tags for a movie. This replaces all existing tags."""
-    # First get the current movie data
-    movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Get current movie data
-        movie_response = await client.get(movie_url, headers=headers)
-        if movie_response.status_code != 200:
-            raise HTTPException(
-                status_code=movie_response.status_code,
-                detail=f"Movie not found: {movie_response.text}"
-            )
-        
-        # Update tags in movie data
-        movie_data = movie_response.json()
-        movie_data["tags"] = tag_ids
-        
-        # Send updated movie data back
-        update_response = await client.put(movie_url, json=movie_data, headers=headers)
-        
-        if update_response.status_code not in [200, 202]:
-            raise HTTPException(
-                status_code=update_response.status_code,
-                detail=f"Failed to update movie tags: {update_response.text}"
-            )
-        
-        return update_response.json()
 
 # Helper function to get tag map
 async def get_tag_map(instance_config: dict) -> dict:
@@ -370,7 +339,7 @@ async def create_tag(
 @router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_tags")
 async def update_movie_tags(
     movie_id: int,
-    tag_ids: List[int],
+    request: UpdateTagsRequest,
     instance_config: dict = Depends(get_radarr_instance),
 ):
     """Update tags for a movie. This replaces all existing tags."""
@@ -389,7 +358,7 @@ async def update_movie_tags(
         
         # Update tags in movie data
         movie_data = movie_response.json()
-        movie_data["tags"] = tag_ids
+        movie_data["tags"] = request.tag_ids
         
         # Send updated movie data back
         update_response = await client.put(movie_url, json=movie_data, headers=headers)
