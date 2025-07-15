@@ -257,7 +257,7 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie")
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_movie_tags")
 async def update_movie_tags(
     movie_id: int,
     tag_ids: List[int],
@@ -308,7 +308,7 @@ async def get_tag_map(instance_config: dict) -> dict:
     return {tag['id']: tag['label'] for tag in tags}
 
 # Update the library search to include tag names
-@router.get("/library/with-tags", summary="Find movies with tag names")
+@router.get("/library/with-tags", summary="Find movies with tag names", operation_id="find_movies_with_tags")
 async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_instance)):
     """Searches library and includes tag names instead of just IDs."""
     all_movies = await radarr_api_call(instance, "movie")
