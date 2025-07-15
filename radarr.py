@@ -19,6 +19,28 @@ class Movie(BaseModel):
 class MoveMovieRequest(BaseModel):
     rootFolderPath: str = Field(..., description="The new root folder path for the movie.")
 
+class QueueItem(BaseModel):
+    id: int
+    movieId: int
+    title: str
+    status: str
+    protocol: str
+    size: float
+    timeLeft: Optional[str] = None
+    estimatedCompletionTime: Optional[str] = None
+    trackedDownloadStatus: Optional[str] = None
+    statusMessages: Optional[List[dict]] = None
+    movie: Optional[dict] = None
+    indexer: Optional[str] = None
+
+class HistoryItem(BaseModel):
+    id: int
+    movieId: int
+    sourceTitle: str
+    eventType: str
+    status: str
+    date: str
+
 # Radarr API Router
 router = APIRouter(
     prefix="/radarr/{instance_name}",
@@ -56,7 +78,7 @@ def get_radarr_instance(instance_name: str):
         raise HTTPException(status_code=404, detail=f"Radarr instance '{instance_name}' not found.")
     return instance
 
-async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", json_data: dict = None):
+async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Radarr instance."""
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{instance['url']}/api/v3/{endpoint}"
@@ -64,30 +86,37 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", js
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             if method == "GET":
-                response = await client.get(url, headers=headers)
+                response = await client.get(url, headers=headers, params=params)
             elif method == "POST":
-                response = await client.post(url, headers=headers, json=json_data)
+                response = await client.post(url, headers=headers, json=json_data, params=params)
             elif method == "PUT":
-                response = await client.put(url, headers=headers, json=json_data)
+                response = await client.put(url, headers=headers, json=json_data, params=params)
+            elif method == "DELETE":
+                response = await client.delete(url, headers=headers, params=params)
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
             response.raise_for_status()
+            
+            # Handle successful empty responses
+            if response.status_code == 204:
+                return None
+                
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie])
-async def search_library(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Search for a movie in the Radarr library by title."""
+@router.get("/library", response_model=List[Movie], summary="Find movie in library")
+async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
+    """Searches the existing Radarr library to find details about a specific movie that has already been added."""
     all_movies = await radarr_api_call(instance, "movie")
     return [m for m in all_movies if term.lower() in m.get("title", "").lower()]
 
-@router.put("/movie/{movie_id}/move", response_model=Movie)
+@router.put("/movie/{movie_id}/move", response_model=Movie, summary="Move movie to new folder")
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """Move a movie to a new root folder."""
+    """Moves a movie to a new root folder and triggers Radarr to move the files."""
     movie = await radarr_api_call(instance, f"movie/{movie_id}")
     
     # Radarr's move logic is different from Sonarr's.
@@ -113,3 +142,25 @@ async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: di
     # Return the updated movie details
     updated_movie = await radarr_api_call(instance, f"movie/{movie_id}")
     return updated_movie
+
+@router.get("/queue", response_model=List[QueueItem], summary="Get Radarr download queue")
+async def get_download_queue(instance: dict = Depends(get_radarr_instance)):
+    """Gets the list of items currently being downloaded or waiting to be downloaded by Radarr."""
+    queue_data = await radarr_api_call(instance, "queue")
+    # The actual queue items are in the 'records' key
+    return queue_data.get("records", [])
+
+@router.get("/history", response_model=List[HistoryItem], summary="Get Radarr download history")
+async def get_download_history(instance: dict = Depends(get_radarr_instance)):
+    """Gets the history of recently grabbed and imported downloads from Radarr."""
+    history_data = await radarr_api_call(instance, "history")
+    # The actual history items are in the 'records' key
+    return history_data.get("records", [])
+
+@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Radarr queue")
+async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_radarr_instance)):
+    """Deletes an item from the Radarr download queue. Optionally, it can also remove the item from the download client."""
+    params = {"removeFromClient": str(removeFromClient).lower()}
+    await radarr_api_call(instance, f"queue/{queue_id}", method="DELETE", params=params)
+    return
+
