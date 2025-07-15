@@ -297,6 +297,31 @@ async def create_tag(
     
     return response.json()
 
+@router.delete("/tags/{tag_id}", status_code=204, operation_id="delete_sonarr_tag", summary="Delete a tag from Sonarr")
+async def delete_tag(
+    tag_id: int,
+    instance_config: dict = Depends(get_sonarr_instance),
+):
+    """Delete a tag from Sonarr by its ID."""
+    url = f"{instance_config['url']}/api/v3/tag/{tag_id}"
+    headers = {"X-Api-Key": instance_config["api_key"]}
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.delete(url, headers=headers)
+        
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tag with ID {tag_id} not found"
+            )
+        elif response.status_code != 200 and response.status_code != 204:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to delete tag: {response.text}"
+            )
+        
+        return
+
 @router.put("/series/{series_id}/tags", summary="Update tags for a series", operation_id="update_tags")
 async def update_series_tags(
     series_id: int,
