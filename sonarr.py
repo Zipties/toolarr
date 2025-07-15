@@ -54,29 +54,6 @@ router = APIRouter(
 )
 
 # In-memory cache for instance configurations
-def get_sonarr_instance(instance_name: str):
-    """Dependency to get a Sonarr instance configuration."""
-    if not SONARR_INSTANCES:
-        load_sonarr_instances()
-    
-    # Direct match first
-    instance = SONARR_INSTANCES.get(instance_name)
-    if instance:
-        return instance
-    
-    # If "default" is requested or instance not found, return the first instance
-    if instance_name.lower() == "default" or instance_name.lower() == "sonarr":
-        if not SONARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
-        # Return the first configured instance as default
-        return next(iter(SONARR_INSTANCES.values()))
-    
-    # Case-insensitive match
-    for name, config in SONARR_INSTANCES.items():
-        if name.lower() == instance_name.lower():
-            return config
-    
-    raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found. Available instances: {list(SONARR_INSTANCES.keys())}")
 SONARR_INSTANCES = {}
 
 def load_sonarr_instances():
@@ -91,6 +68,21 @@ def load_sonarr_instances():
         SONARR_INSTANCES[name] = {"url": url, "api_key": api_key}
         i += 1
 
+def get_sonarr_instance(instance_name: str):
+    """Dependency to get a Sonarr instance's config. Handles 'default' keyword."""
+    if not SONARR_INSTANCES:
+        load_sonarr_instances()
+    
+    if instance_name == "default":
+        if not SONARR_INSTANCES:
+            raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
+        # Return the first configured instance
+        return next(iter(SONARR_INSTANCES.values()))
+
+    instance = SONARR_INSTANCES.get(instance_name)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found.")
+    return instance
 
 async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Sonarr instance."""
@@ -216,13 +208,10 @@ async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
     """Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
     return await sonarr_api_call(instance, "qualityprofile")
 
-# Tag endpoints for Sonarr following API v3 spec
 
-@router.get("/tags", summary="Get all tags from Sonarr")
-async def get_tags(
-    instance_config: dict = Depends(get_sonarr_instance),
-):
-    """Get all tags configured in Sonarr."""
+# Helper function to get tag map
+async def get_tag_map(instance_config: dict) -> dict:
+    """Get a mapping of tag IDs to tag names."""
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
@@ -230,65 +219,26 @@ async def get_tags(
         response = await client.get(url, headers=headers)
     
     if response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to fetch tags: {response.text}"
-        )
+        return {}
     
-    return response.json()
+    tags = response.json()
+    return {tag['id']: tag['label'] for tag in tags}
 
-@router.post("/tags", summary="Create a new tag in Sonarr")
-async def create_tag(
-    label: str,
-    instance_config: dict = Depends(get_sonarr_instance),
-):
-    """Create a new tag in Sonarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    payload = {"label": label}
+# Update the library search to include tag names
+@router.get("/library/with-tags", summary="Find TV SHOW with tag names")
+async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
+    """Searches library and includes tag names instead of just IDs."""
+    all_series = await sonarr_api_call(instance, "series")
+    tag_map = await get_tag_map(instance)
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
+    filtered_series = []
+    for s in all_series:
+        if term.lower() in s.get("title", "").lower():
+            # Add tag names
+            if "tags" in s and s["tags"]:
+                s["tagNames"] = [tag_map.get(tag_id, f"Unknown tag {tag_id}") for tag_id in s["tags"]]
+            else:
+                s["tagNames"] = []
+            filtered_series.append(s)
     
-    if response.status_code != 201:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to create tag: {response.text}"
-        )
-    
-    return response.json()
-
-@router.put("/series/{series_id}/tags", summary="Update tags for a series")
-async def update_series_tags(
-    series_id: int,
-    tag_ids: List[int],
-    instance_config: dict = Depends(get_sonarr_instance),
-):
-    """Update tags for a series. This replaces all existing tags."""
-    # First get the current series data
-    series_url = f"{instance_config['url']}/api/v3/series/{series_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Get current series data
-        series_response = await client.get(series_url, headers=headers)
-        if series_response.status_code != 200:
-            raise HTTPException(
-                status_code=series_response.status_code,
-                detail=f"Series not found: {series_response.text}"
-            )
-        
-        # Update tags in series data
-        series_data = series_response.json()
-        series_data["tags"] = tag_ids
-        
-        # Send updated series data back
-        update_response = await client.put(series_url, json=series_data, headers=headers)
-        
-        if update_response.status_code not in [200, 202]:
-            raise HTTPException(
-                status_code=update_response.status_code,
-                detail=f"Failed to update series tags: {update_response.text}"
-            )
-        
-        return update_response.json()
+    return filtered_series
