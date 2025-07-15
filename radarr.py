@@ -220,6 +220,11 @@ async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
 
 # Tag endpoints for Radarr following API v3 spec
 
+@router.get("/rootfolders", operation_id="get_radarr_rootfolders", summary="Get root folders from Radarr")
+async def get_root_folders(instance: dict = Depends(get_radarr_instance)):
+    """Get all configured root folders in Radarr."""
+    return await radarr_api_call(instance, "rootfolder")
+
 @router.get("/tags", summary="Get all tags from Radarr")
 async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
