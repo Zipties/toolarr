@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  toolarr:
+    # Using the GitHub Container Registry image
+    image: ghcr.io/zipties/toolarr:master
+    env_file: .env
+    networks:
+      - traefik_public
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+networks:
+  traefik_public:
+    external: true
