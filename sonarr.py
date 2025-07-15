@@ -27,7 +27,7 @@ class QueueItem(BaseModel):
     seriesId: int
     episodeId: int
     title: str
-    status: str
+    status: Optional[str] = None
     protocol: str
     size: float
     timeLeft: Optional[str] = None
@@ -44,7 +44,7 @@ class HistoryItem(BaseModel):
     episodeId: int
     sourceTitle: str
     eventType: str
-    status: str
+    status: Optional[str] = None
     date: str
 
 # Sonarr API Router
