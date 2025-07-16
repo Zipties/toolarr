@@ -1,3 +1,4 @@
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -61,6 +62,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
     """Make an API call to a specific Radarr instance."""
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{instance['url']}/api/v3/{endpoint}"
+    print(f"Calling Radarr API: {method} {url} with params: {params}")
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
@@ -75,6 +77,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
+            print(f"Radarr API response: {response.status_code} {response.text}")
             response.raise_for_status()
             
             # Handle successful empty responses
@@ -87,9 +90,12 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie], summary="Find MOVIE in Radarr library (includes quality profile name)")
+@router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library")
 async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches the existing Radarr library to find details about a specific movie including its quality profile name. No need to separately query quality profiles."""
+    """
+    Searches for a movie that is already in the Radarr library.
+    This is for checking existing movies, not for discovering new ones.
+    """
     all_movies = await radarr_api_call(instance, "movie")
     
     # Get quality profiles to map IDs to names
@@ -106,6 +112,24 @@ async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_i
             filtered_movies.append(m)
     
     return filtered_movies
+
+@router.get("/search", summary="Search for a movie by term")
+async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
+    """Searches for a movie by term and returns the TMDB ID."""
+    try:
+        return await radarr_api_call(instance, "movie/lookup", params={"term": term})
+    except Exception as e:
+        print(f"Error in search_movie: {e}")
+        raise HTTPException(status_code=500, detail="Error searching for movie.")
+
+@router.get("/lookup", summary="Search for a new movie to add to Radarr")
+async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance)):
+    """
+    Searches for a new movie by a search term.
+    This is the first step to add a new movie, as it provides the necessary tmdbId.
+    """
+    encoded_term = quote(term)
+    return await radarr_api_call(instance, f"movie/lookup?term={encoded_term}")
 
 @router.put("/movie/{movie_id}/move", response_model=Movie, summary="Move movie to new folder")
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
@@ -137,35 +161,108 @@ async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: di
     return updated_movie
 
 class AddMovieRequest(BaseModel):
+    title: Optional[str] = None
     tmdbId: int
-    qualityProfileId: int
-    rootFolderPath: str
+    qualityProfileId: Optional[int] = None
+    rootFolderPath: Optional[str] = None
 
 @router.post("/movie", response_model=Movie, summary="Add a new movie to Radarr")
 async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Adds a new movie to Radarr by looking it up via its TMDB ID."""
     # First, lookup the movie by TMDB ID
     try:
-        lookup_results = await radarr_api_call(instance, "movie/lookup", params={"term": f"tmdb:{request.tmdbId}"})
-        if not lookup_results:
+        movie_to_add = await radarr_api_call(instance, f"movie/lookup/tmdb?tmdbid={request.tmdbId}")
+        if not movie_to_add:
             raise HTTPException(status_code=404, detail=f"Movie with TMDB ID {request.tmdbId} not found.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error looking up movie: {e}")
 
-    # The first result is usually the correct one
-    try:
-        movie_to_add = lookup_results[0]
-    except IndexError:
-        raise HTTPException(status_code=404, detail=f"Movie with TMDB ID {request.tmdbId} not found in lookup results.")
+    # Get default root folder path and quality profile from environment variables
+    root_folder_path = os.environ.get("RADARR_DEFAULT_ROOT_FOLDER_PATH", request.rootFolderPath)
+    quality_profile_name = os.environ.get("RADARR_DEFAULT_QUALITY_PROFILE_NAME", None)
 
-    # Set the quality profile and root folder path
-    movie_to_add["qualityProfileId"] = request.qualityProfileId
-    movie_to_add["rootFolderPath"] = request.rootFolderPath
-    movie_to_add["monitored"] = True
-    movie_to_add["addOptions"] = {"searchForMovie": True}
+    if not root_folder_path:
+        raise HTTPException(status_code=400, detail="rootFolderPath must be provided either in the request or as an environment variable.")
+
+    # Get quality profiles to find the ID for the given name
+    quality_profiles = await radarr_api_call(instance, "qualityprofile")
+    quality_profile_id = None
+    if request.qualityProfileId:
+        quality_profile_id = request.qualityProfileId
+    elif quality_profile_name:
+        for profile in quality_profiles:
+            if profile["name"].lower() == quality_profile_name.lower():
+                quality_profile_id = profile["id"]
+                break
+    
+    if not quality_profile_id:
+        raise HTTPException(status_code=400, detail=f"Quality profile '{quality_profile_name}' not found.")
+
+    # Construct the payload for adding the movie
+    add_payload = {
+        "tmdbId": movie_to_add["tmdbId"],
+        "title": movie_to_add["title"],
+        "qualityProfileId": quality_profile_id,
+        "rootFolderPath": root_folder_path,
+        "monitored": True,
+        "addOptions": {"searchForMovie": True}
+    }
 
     # Add the movie to Radarr
-    added_movie = await radarr_api_call(instance, "movie", method="POST", json_data=movie_to_add)
+    added_movie = await radarr_api_call(instance, "movie", method="POST", json_data=add_payload)
+    return added_movie
+
+@router.post("/radarr/add_by_title", response_model=Movie, summary="Add a new movie to Radarr by title", operation_id="add_movie_by_title_radarr")
+async def add_movie_by_title_radarr(title: str, instance: dict = Depends(get_radarr_instance)):
+    """
+    Adds a new movie to Radarr by looking it up by title.
+    This is a one-shot command that handles the lookup and add process.
+    """
+    # First, lookup the movie by title
+    try:
+        lookup_results = await radarr_api_call(instance, "movie/lookup", params={"term": title})
+        if not lookup_results:
+            raise HTTPException(status_code=404, detail=f"Movie with title '{title}' not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error looking up movie: {e}")
+
+    # Find the correct movie from the lookup results
+    movie_to_add = lookup_results[0]
+    
+    if not movie_to_add:
+        raise HTTPException(status_code=404, detail=f"Movie with title '{title}' not found in lookup results.")
+
+    # Get default root folder path and quality profile from environment variables
+    root_folder_path = os.environ.get("RADARR_DEFAULT_ROOT_FOLDER_PATH")
+    quality_profile_name = os.environ.get("RADARR_DEFAULT_QUALITY_PROFILE_NAME")
+
+    if not root_folder_path:
+        raise HTTPException(status_code=400, detail="rootFolderPath must be provided either in the request or as an environment variable.")
+
+    # Get quality profiles to find the ID for the given name
+    quality_profiles = await radarr_api_call(instance, "qualityprofile")
+    quality_profile_id = None
+    if quality_profile_name:
+        for profile in quality_profiles:
+            if profile["name"].lower() == quality_profile_name.lower():
+                quality_profile_id = profile["id"]
+                break
+    
+    if not quality_profile_id:
+        raise HTTPException(status_code=400, detail=f"Quality profile '{quality_profile_name}' not found.")
+
+    # Construct the payload for adding the movie
+    add_payload = {
+        "tmdbId": movie_to_add["tmdbId"],
+        "title": movie_to_add["title"],
+        "qualityProfileId": quality_profile_id,
+        "rootFolderPath": root_folder_path,
+        "monitored": True,
+        "addOptions": {"searchForMovie": True}
+    }
+
+    # Add the movie to Radarr
+    added_movie = await radarr_api_call(instance, "movie", method="POST", json_data=add_payload)
     return added_movie
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Radarr download queue")
@@ -201,7 +298,7 @@ class UpdateMovieRequest(BaseModel):
     tags: Optional[List[int]] = None
     rootFolderPath: Optional[str] = None
 class UpdateTagsRequest(BaseModel):
-    tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the movie")
+    tags: List[int] = Field(..., description="List of tag IDs to assign to the movie")
 
 
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
@@ -275,7 +372,7 @@ async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_i
     return filtered_movies
 
 # Tag management endpoints
-@router.get("/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
+@router.get("/radarr/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
 ):
@@ -294,7 +391,7 @@ async def get_tags(
     
     return response.json()
 
-@router.post("/tags", summary="Create a new tag in Radarr", operation_id="radarr_create_tag") 
+@router.post("/radarr/tags", summary="Create a new tag in Radarr", operation_id="radarr_create_tag") 
 async def create_tag(
     label: str,
     instance_config: dict = Depends(get_radarr_instance),
@@ -337,7 +434,7 @@ async def update_movie_tags(
         
         # Update tags in movie data
         movie_data = movie_response.json()
-        movie_data["tags"] = request.tag_ids
+        movie_data["tags"] = request.tags
         
         # Send updated movie data back
         update_response = await client.put(movie_url, json=movie_data, headers=headers)
