@@ -171,7 +171,7 @@ async def get_download_history(instance: dict = Depends(get_sonarr_instance)):
     # The actual history items are in the 'records' key
     return history_data.get("records", [])
 
-@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Sonarr queue", operation_id="delete_queue_item")
+@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Sonarr queue", operation_id="delete_sonarr_queue_item")
 async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_sonarr_instance)):
     """Deletes an item from the Sonarr download queue. Optionally, it can also remove the item from the download client."""
     params = {"removeFromClient": str(removeFromClient).lower()}
@@ -196,29 +196,6 @@ class UpdateSeriesRequest(BaseModel):
 
 class UpdateTagsRequest(BaseModel):
     tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the series")
-
-
-async def update_series(series_id: int, request: UpdateSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
-    """Updates properties of a specific series, such as monitoring status, quality profile, and per-season monitoring."""
-    # First, get the full series object
-    series_data = await sonarr_api_call(instance, f"series/{series_id}")
-
-    # Update top-level fields if they were provided
-    if request.monitored is not None:
-        series_data["monitored"] = request.monitored
-    if request.qualityProfileId is not None:
-        series_data["qualityProfileId"] = request.qualityProfileId
-
-    # Update per-season monitoring if provided
-    if request.seasons:
-        for season_update in request.seasons:
-            for season in series_data.get("seasons", []):
-                if season.get("seasonNumber") == season_update.seasonNumber:
-                    season["monitored"] = season_update.monitored
-                    break
-
-    # Send the updated object back to Sonarr
-    return await sonarr_api_call(instance, "series", method="PUT", json_data=series_data)
 
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for TV SHOWS in Sonarr")
 async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
