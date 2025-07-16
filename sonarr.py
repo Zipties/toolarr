@@ -359,7 +359,7 @@ async def update_series_properties(
     # Send update
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
 
-@router.put("/series/{series_id}/tags", summary="Update tags for a TV SERIES in Sonarr", operation_id="sonarr_update_tags")
+@router.put("/series/{series_id}/tags", summary="Update tags for a TV show in Sonarr (NOT for movies)", operation_id="update_series_tags_sonarr")
 async def update_series_tags(
     series_id: int,
     request: UpdateTagsRequest,
