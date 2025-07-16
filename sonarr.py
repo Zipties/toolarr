@@ -84,9 +84,12 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
 
-@router.get("/library", response_model=List[Series], summary="Find TV SHOW in Sonarr library (includes quality profile name)")
+@router.get("/library", response_model=List[Series], summary="Check if a series exists in the Sonarr library")
 async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches the existing Sonarr library to find details about a specific TV series including its quality profile name. No need to separately query quality profiles."""
+    """
+    Searches for a series that is already in the Sonarr library.
+    This is for checking existing series, not for discovering new ones.
+    """
     all_series = await sonarr_api_call(instance, "series")
     
     # Get quality profiles to map IDs to names
@@ -104,6 +107,19 @@ async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_
     
     return filtered_series
 
+@router.get("/search", summary="Search for a new series by term")
+async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
+    """Searches for a new series by term and returns the TVDB ID."""
+    return await sonarr_api_call(instance, "series/lookup", params={"term": term})
+
+@router.get("/lookup", summary="Search for a new series to add to Sonarr")
+async def lookup_series(term: str, instance: dict = Depends(get_sonarr_instance)):
+    """
+    Searches for a new series by a search term.
+    This is the first step to add a new series, as it provides the necessary tvdbId.
+    """
+    return await sonarr_api_call(instance, "series/lookup", params={"term": term})
+
 @router.put("/series/{sonarr_id}/move", response_model=Series, summary="Move series to new folder")
 async def move_series(sonarr_id: int, move_request: MoveSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
     """Moves a series to a new root folder and triggers Sonarr to move the files."""
@@ -119,31 +135,122 @@ async def move_series(sonarr_id: int, move_request: MoveSeriesRequest, instance:
     return updated_series
 
 class AddSeriesRequest(BaseModel):
+    title: Optional[str] = None
     tvdbId: int
-    qualityProfileId: int
-    languageProfileId: int
-    rootFolderPath: str
+    qualityProfileId: Optional[int] = None
+    languageProfileId: Optional[int] = None
+    rootFolderPath: Optional[str] = None
 
 @router.post("/series", response_model=Series, summary="Add a new series to Sonarr")
 async def add_series(request: AddSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
     """Adds a new series to Sonarr by looking it up via its TVDB ID."""
     # First, lookup the series by TVDB ID
-    lookup_results = await sonarr_api_call(instance, "series/lookup", params={"term": f"tvdb:{request.tvdbId}"})
-    if not lookup_results:
-        raise HTTPException(status_code=404, detail=f"Series with TVDB ID {request.tvdbId} not found.")
+    try:
+        series_to_add = await sonarr_api_call(instance, f"series/lookup?term=tvdb:{request.tvdbId}")
+        if not series_to_add:
+            raise HTTPException(status_code=404, detail=f"Series with TVDB ID {request.tvdbId} not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error looking up series: {e}")
 
-    # The first result is usually the correct one
-    series_to_add = lookup_results[0]
+    # Get default root folder path and quality profile from environment variables
+    root_folder_path = os.environ.get("SONARR_DEFAULT_ROOT_FOLDER_PATH", request.rootFolderPath)
+    quality_profile_name = os.environ.get("SONARR_DEFAULT_QUALITY_PROFILE_NAME", None)
+    language_profile_id = int(os.environ.get("SONARR_DEFAULT_LANGUAGE_PROFILE_ID", request.languageProfileId or 1))
 
-    # Set the quality profile, language profile, and root folder path
-    series_to_add["qualityProfileId"] = request.qualityProfileId
-    series_to_add["languageProfileId"] = request.languageProfileId
-    series_to_add["rootFolderPath"] = request.rootFolderPath
-    series_to_add["monitored"] = True
-    series_to_add["addOptions"] = {"searchForMissingEpisodes": True}
+    if not root_folder_path:
+        raise HTTPException(status_code=400, detail="rootFolderPath must be provided either in the request or as an environment variable.")
+
+    # Get quality profiles to find the ID for the given name
+    quality_profiles = await sonarr_api_call(instance, "qualityprofile")
+    quality_profile_id = None
+    if request.qualityProfileId:
+        quality_profile_id = request.qualityProfileId
+    elif quality_profile_name:
+        for profile in quality_profiles:
+            if profile["name"].lower() == quality_profile_name.lower():
+                quality_profile_id = profile["id"]
+                break
+    
+    if not quality_profile_id:
+        raise HTTPException(status_code=400, detail=f"Quality profile '{quality_profile_name}' not found.")
+
+    # Construct the payload for adding the series
+    add_payload = {
+        "tvdbId": series_to_add[0]["tvdbId"],
+        "title": series_to_add[0]["title"],
+        "qualityProfileId": quality_profile_id,
+        "languageProfileId": language_profile_id,
+        "rootFolderPath": root_folder_path,
+        "monitored": True,
+        "seasons": series_to_add[0]["seasons"],
+        "addOptions": {"searchForMissingEpisodes": True}
+    }
 
     # Add the series to Sonarr
-    added_series = await sonarr_api_call(instance, "series", method="POST", json_data=series_to_add)
+    added_series = await sonarr_api_call(instance, "series", method="POST", json_data=add_payload)
+    return added_series
+
+@router.post("/sonarr/add_by_title", response_model=Series, summary="Add a new series to Sonarr by title", operation_id="add_series_by_title_sonarr")
+async def add_series_by_title_sonarr(title: str, year: Optional[int] = None, instance: dict = Depends(get_sonarr_instance)):
+    """
+    Adds a new series to Sonarr by looking it up by title and year.
+    This is a one-shot command that handles the lookup and add process.
+    """
+    # First, lookup the series by title
+    try:
+        lookup_results = await sonarr_api_call(instance, "series/lookup", params={"term": title})
+        if not lookup_results:
+            raise HTTPException(status_code=404, detail=f"Series with title '{title}' not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error looking up series: {e}")
+
+    # Find the correct series from the lookup results
+    series_to_add = None
+    if year:
+        for series in lookup_results:
+            if series.get("year") == year:
+                series_to_add = series
+                break
+    else:
+        series_to_add = lookup_results[0]
+    
+    if not series_to_add:
+        raise HTTPException(status_code=404, detail=f"Series with title '{title}' and year '{year}' not found in lookup results.")
+
+    # Get default root folder path and quality profile from environment variables
+    root_folder_path = os.environ.get("SONARR_DEFAULT_ROOT_FOLDER_PATH")
+    quality_profile_name = os.environ.get("SONARR_DEFAULT_QUALITY_PROFILE_NAME")
+    language_profile_id = int(os.environ.get("SONARR_DEFAULT_LANGUAGE_PROFILE_ID", 1))
+
+    if not root_folder_path:
+        raise HTTPException(status_code=400, detail="rootFolderPath must be provided either in the request or as an environment variable.")
+
+    # Get quality profiles to find the ID for the given name
+    quality_profiles = await sonarr_api_call(instance, "qualityprofile")
+    quality_profile_id = None
+    if quality_profile_name:
+        for profile in quality_profiles:
+            if profile["name"].lower() == quality_profile_name.lower():
+                quality_profile_id = profile["id"]
+                break
+    
+    if not quality_profile_id:
+        raise HTTPException(status_code=400, detail=f"Quality profile '{quality_profile_name}' not found.")
+
+    # Construct the payload for adding the series
+    add_payload = {
+        "tvdbId": series_to_add["tvdbId"],
+        "title": series_to_add["title"],
+        "qualityProfileId": quality_profile_id,
+        "languageProfileId": language_profile_id,
+        "rootFolderPath": root_folder_path,
+        "monitored": True,
+        "seasons": series_to_add["seasons"],
+        "addOptions": {"searchForMissingEpisodes": True}
+    }
+
+    # Add the series to Sonarr
+    added_series = await sonarr_api_call(instance, "series", method="POST", json_data=add_payload)
     return added_series
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Sonarr download queue")
@@ -184,7 +291,7 @@ class UpdateSeriesRequest(BaseModel):
     tags: Optional[List[int]] = None
 
 class UpdateTagsRequest(BaseModel):
-    tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the series")
+    tags: List[int] = Field(..., description="List of tag IDs to assign to the series")
 
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for TV SHOWS in Sonarr")
 async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
@@ -227,7 +334,7 @@ async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_i
     return filtered_series
 
 # Tag management endpoints
-@router.get("/tags", summary="Get all tags from Sonarr", operation_id="sonarr_get_tags")
+@router.get("/sonarr/tags", summary="Get all tags from Sonarr", operation_id="sonarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
@@ -251,7 +358,7 @@ async def get_root_folders(instance: dict = Depends(get_sonarr_instance)):
     """Get all configured root folders in Sonarr."""
     return await sonarr_api_call(instance, "rootfolder")
 
-@router.post("/tags", summary="Create a new tag in Sonarr", operation_id="sonarr_create_tag")
+@router.post("/sonarr/tags", summary="Create a new tag in Sonarr", operation_id="sonarr_create_tag")
 async def create_tag(
     label: str,
     instance_config: dict = Depends(get_sonarr_instance),
@@ -272,7 +379,7 @@ async def create_tag(
     
     return response.json()
 
-@router.delete("/tags/{tag_id}", status_code=204, operation_id="delete_sonarr_tag", summary="Delete a tag from Sonarr")
+@router.delete("/sonarr/tags/{tag_id}", status_code=204, operation_id="delete_sonarr_tag", summary="Delete a tag from Sonarr")
 async def delete_tag(
     tag_id: int,
     instance_config: dict = Depends(get_sonarr_instance),
@@ -347,7 +454,7 @@ async def update_series_tags(
         
         # Update tags in series data
         series_data = series_response.json()
-        series_data["tags"] = request.tag_ids
+        series_data["tags"] = request.tags
         
         # Send updated series data back
         update_response = await client.put(series_url, json=series_data, headers=headers)
