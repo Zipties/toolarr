@@ -287,6 +287,9 @@ class UpdateSeriesRequest(BaseModel):
 class UpdateTagsRequest(BaseModel):
     tags: List[int] = Field(..., description="List of tag IDs to assign to the series")
 
+class MonitorRequest(BaseModel):
+    monitored: bool
+
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for TV SHOWS in Sonarr")
 async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
     """Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
@@ -463,6 +466,37 @@ async def update_series_tags(
             )
         
         return update_response.json()
+
+@router.put("/series/{series_id}/monitor", status_code=200, summary="Update monitoring status for an entire series")
+async def monitor_series(series_id: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
+    """
+    Updates the monitoring status for an entire series.
+    """
+    series_data = await sonarr_api_call(instance, f"series/{series_id}")
+    series_data["monitored"] = request.monitored
+    updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
+    return updated_series
+
+@router.put("/series/{series_id}/seasons/{season_number}/monitor", status_code=200, summary="Update monitoring status for a single season")
+async def monitor_season(series_id: int, season_number: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
+    """
+    Updates the monitoring status for a single season of a series.
+    """
+    series_data = await sonarr_api_call(instance, f"series/{series_id}")
+    
+    # Find the season and update its monitored status
+    season_found = False
+    for season in series_data.get("seasons", []):
+        if season.get("seasonNumber") == season_number:
+            season["monitored"] = request.monitored
+            season_found = True
+            break
+            
+    if not season_found:
+        raise HTTPException(status_code=404, detail=f"Season {season_number} not found in series {series_id}")
+
+    updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
+    return updated_series
 
 @router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
 async def delete_series(
