@@ -53,28 +53,30 @@ router = APIRouter(
 
 # In-memory cache for instance configurations
 def get_radarr_instance(instance_name: str):
-    """Dependency to get a Radarr instance configuration."""
+    """Dependency to get a Radarr instance's config. Handles 'default' keyword and case-insensitive matching."""
     if not RADARR_INSTANCES:
         load_radarr_instances()
     
-    # Direct match first
+    # Handle 'default' keyword
+    if instance_name.lower() == "default":
+        if not RADARR_INSTANCES:
+            raise HTTPException(status_code=404, detail="No Radarr instances configured.")
+        # Return the first configured instance
+        return next(iter(RADARR_INSTANCES.values()))
+    
+    # Try exact match first
     instance = RADARR_INSTANCES.get(instance_name)
     if instance:
         return instance
     
-    # If "default" is requested or instance not found, return the first instance
-    if instance_name.lower() == "default" or instance_name.lower() == "radarr":
-        if not RADARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Radarr instances configured.")
-        # Return the first configured instance as default
-        return next(iter(RADARR_INSTANCES.values()))
-    
-    # Case-insensitive match
+    # Try case-insensitive match
     for name, config in RADARR_INSTANCES.items():
         if name.lower() == instance_name.lower():
             return config
     
+    # Raise error for unknown instance names
     raise HTTPException(status_code=404, detail=f"Radarr instance '{instance_name}' not found. Available instances: {list(RADARR_INSTANCES.keys())}")
+
 RADARR_INSTANCES = {}
 
 def load_radarr_instances():
@@ -368,7 +370,7 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie", operation_id="update_tags")
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a MOVIE in Radarr", operation_id="update_tags")
 async def update_movie_tags(
     movie_id: int,
     request: UpdateTagsRequest,

@@ -81,7 +81,7 @@ def get_sonarr_instance(instance_name: str):
             raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
         # Return the first configured instance
         return next(iter(SONARR_INSTANCES.values()))
-
+    
     # Try exact match first
     instance = SONARR_INSTANCES.get(instance_name)
     if instance:
@@ -92,11 +92,8 @@ def get_sonarr_instance(instance_name: str):
         if name.lower() == instance_name.lower():
             return config
     
-    # If no match found, try to use first instance as default
-    if SONARR_INSTANCES:
-        return next(iter(SONARR_INSTANCES.values()))
-    
-    raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found.")
+    # Raise error for unknown instance names
+    raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found. Available instances: {list(SONARR_INSTANCES.keys())}")
 
 async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Sonarr instance."""
@@ -362,7 +359,7 @@ async def update_series_properties(
     # Send update
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
 
-@router.put("/series/{series_id}/tags", summary="Update tags for a series", operation_id="update_tags")
+@router.put("/series/{series_id}/tags", summary="Update tags for a TV SERIES in Sonarr", operation_id="update_tags")
 async def update_series_tags(
     series_id: int,
     request: UpdateTagsRequest,
