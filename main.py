@@ -13,6 +13,12 @@ app = FastAPI(
     title="Toolarr: Sonarr and Radarr API Tool Server",
     version="2.0.0",
     description="OpenAPI server for Sonarr and Radarr integration with Open WebUI",
+    servers=[
+        {
+            "url": "https://toolarr.moderncaveman.us",
+            "description": "Production server"
+        }
+    ]
 )
 
 # --- CORS Configuration ---
