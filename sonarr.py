@@ -191,9 +191,9 @@ async def add_series(request: AddSeriesRequest, instance: dict = Depends(get_son
     return added_series
 
 @router.post("/sonarr/add_by_title", response_model=Series, summary="Add a new series to Sonarr by title", operation_id="add_series_by_title_sonarr")
-async def add_series_by_title_sonarr(title: str, year: Optional[int] = None, instance: dict = Depends(get_sonarr_instance)):
+async def add_series_by_title_sonarr(title: str, instance: dict = Depends(get_sonarr_instance)):
     """
-    Adds a new series to Sonarr by looking it up by title and year.
+    Adds a new series to Sonarr by looking it up by title.
     This is a one-shot command that handles the lookup and add process.
     """
     # First, lookup the series by title
@@ -205,17 +205,10 @@ async def add_series_by_title_sonarr(title: str, year: Optional[int] = None, ins
         raise HTTPException(status_code=500, detail=f"Error looking up series: {e}")
 
     # Find the correct series from the lookup results
-    series_to_add = None
-    if year:
-        for series in lookup_results:
-            if series.get("year") == year:
-                series_to_add = series
-                break
-    else:
-        series_to_add = lookup_results[0]
+    series_to_add = lookup_results[0]
     
     if not series_to_add:
-        raise HTTPException(status_code=404, detail=f"Series with title '{title}' and year '{year}' not found in lookup results.")
+        raise HTTPException(status_code=404, detail=f"Series with title '{title}' not found in lookup results.")
 
     # Get default root folder path and quality profile from environment variables
     root_folder_path = os.environ.get("SONARR_DEFAULT_ROOT_FOLDER_PATH")
