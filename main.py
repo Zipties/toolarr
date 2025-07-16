@@ -3,9 +3,10 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from sonarr import router as sonarr_router, load_sonarr_instances
+from sonarr import router as sonarr_router
 from instance_endpoints import instances_router
-from radarr import router as radarr_router, load_radarr_instances
+from radarr import router as radarr_router
+
 
 # --- App Initialization ---
 app = FastAPI(
@@ -45,14 +46,14 @@ app.include_router(instances_router, dependencies=[Depends(verify_api_key)])
 # --- Startup Event ---
 @app.on_event("startup")
 async def startup_event():
-    load_sonarr_instances()
-    load_radarr_instances()
+    pass
 
 # --- Root Endpoint ---
 @app.get("/", summary="Health check")
 async def root():
     """Basic health check endpoint."""
     return {"status": "healthy", "service": "toolarr-server"}
+
 # Diagnostic endpoint to catch any unmatched requests
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def catch_all(path: str, request: Request):

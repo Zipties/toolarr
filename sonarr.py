@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import httpx
 import os
+from instance_endpoints import get_sonarr_instance
 
 # Pydantic Models for Sonarr
 class Series(BaseModel):
@@ -54,46 +55,6 @@ router = APIRouter(
     prefix="/sonarr/{instance_name}",
     tags=["sonarr"],
 )
-
-# In-memory cache for instance configurations
-SONARR_INSTANCES = {}
-
-def load_sonarr_instances():
-    """Load Sonarr instance configurations from environment variables."""
-    i = 1
-    while True:
-        name = os.environ.get(f"SONARR_INSTANCE_{i}_NAME")
-        url = os.environ.get(f"SONARR_INSTANCE_{i}_URL")
-        api_key = os.environ.get(f"SONARR_INSTANCE_{i}_API_KEY")
-        if not all([name, url, api_key]):
-            break
-        SONARR_INSTANCES[name] = {"url": url, "api_key": api_key}
-        i += 1
-
-def get_sonarr_instance(instance_name: str):
-    """Dependency to get a Sonarr instance's config. Handles 'default' keyword and case-insensitive matching."""
-    if not SONARR_INSTANCES:
-        load_sonarr_instances()
-    
-    # Handle 'default' keyword
-    if instance_name.lower() == "default":
-        if not SONARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Sonarr instances configured.")
-        # Return the first configured instance
-        return next(iter(SONARR_INSTANCES.values()))
-    
-    # Try exact match first
-    instance = SONARR_INSTANCES.get(instance_name)
-    if instance:
-        return instance
-    
-    # Try case-insensitive match
-    for name, config in SONARR_INSTANCES.items():
-        if name.lower() == instance_name.lower():
-            return config
-    
-    # Raise error for unknown instance names
-    raise HTTPException(status_code=404, detail=f"Sonarr instance '{instance_name}' not found. Available instances: {list(SONARR_INSTANCES.keys())}")
 
 async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Sonarr instance."""
@@ -156,6 +117,34 @@ async def move_series(sonarr_id: int, move_request: MoveSeriesRequest, instance:
     
     updated_series = await sonarr_api_call(instance, f"series/{series['id']}", method="PUT", json_data=series)
     return updated_series
+
+class AddSeriesRequest(BaseModel):
+    tvdbId: int
+    qualityProfileId: int
+    languageProfileId: int
+    rootFolderPath: str
+
+@router.post("/series", response_model=Series, summary="Add a new series to Sonarr")
+async def add_series(request: AddSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
+    """Adds a new series to Sonarr by looking it up via its TVDB ID."""
+    # First, lookup the series by TVDB ID
+    lookup_results = await sonarr_api_call(instance, "series/lookup", params={"term": f"tvdb:{request.tvdbId}"})
+    if not lookup_results:
+        raise HTTPException(status_code=404, detail=f"Series with TVDB ID {request.tvdbId} not found.")
+
+    # The first result is usually the correct one
+    series_to_add = lookup_results[0]
+
+    # Set the quality profile, language profile, and root folder path
+    series_to_add["qualityProfileId"] = request.qualityProfileId
+    series_to_add["languageProfileId"] = request.languageProfileId
+    series_to_add["rootFolderPath"] = request.rootFolderPath
+    series_to_add["monitored"] = True
+    series_to_add["addOptions"] = {"searchForMissingEpisodes": True}
+
+    # Add the series to Sonarr
+    added_series = await sonarr_api_call(instance, "series", method="POST", json_data=series_to_add)
+    return added_series
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Sonarr download queue")
 async def get_download_queue(instance: dict = Depends(get_sonarr_instance)):

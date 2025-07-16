@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import httpx
 import os
+from instance_endpoints import get_radarr_instance
 
 # Pydantic Models for Radarr
 class Movie(BaseModel):
@@ -51,44 +52,9 @@ router = APIRouter(
 )
 
 # In-memory cache for instance configurations
-def get_radarr_instance(instance_name: str):
-    """Dependency to get a Radarr instance's config. Handles 'default' keyword and case-insensitive matching."""
-    if not RADARR_INSTANCES:
-        load_radarr_instances()
-    
-    # Handle 'default' keyword
-    if instance_name.lower() == "default":
-        if not RADARR_INSTANCES:
-            raise HTTPException(status_code=404, detail="No Radarr instances configured.")
-        # Return the first configured instance
-        return next(iter(RADARR_INSTANCES.values()))
-    
-    # Try exact match first
-    instance = RADARR_INSTANCES.get(instance_name)
-    if instance:
-        return instance
-    
-    # Try case-insensitive match
-    for name, config in RADARR_INSTANCES.items():
-        if name.lower() == instance_name.lower():
-            return config
-    
-    # Raise error for unknown instance names
-    raise HTTPException(status_code=404, detail=f"Radarr instance '{instance_name}' not found. Available instances: {list(RADARR_INSTANCES.keys())}")
 
-RADARR_INSTANCES = {}
 
-def load_radarr_instances():
-    """Load Radarr instance configurations from environment variables."""
-    i = 1
-    while True:
-        name = os.environ.get(f"RADARR_INSTANCE_{i}_NAME")
-        url = os.environ.get(f"RADARR_INSTANCE_{i}_URL")
-        api_key = os.environ.get(f"RADARR_INSTANCE_{i}_API_KEY")
-        if not all([name, url, api_key]):
-            break
-        RADARR_INSTANCES[name] = {"url": url, "api_key": api_key}
-        i += 1
+
 
 
 async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
@@ -169,6 +135,38 @@ async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: di
     # Return the updated movie details
     updated_movie = await radarr_api_call(instance, f"movie/{movie_id}")
     return updated_movie
+
+class AddMovieRequest(BaseModel):
+    tmdbId: int
+    qualityProfileId: int
+    rootFolderPath: str
+
+@router.post("/movie", response_model=Movie, summary="Add a new movie to Radarr")
+async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radarr_instance)):
+    """Adds a new movie to Radarr by looking it up via its TMDB ID."""
+    # First, lookup the movie by TMDB ID
+    try:
+        lookup_results = await radarr_api_call(instance, "movie/lookup", params={"term": f"tmdb:{request.tmdbId}"})
+        if not lookup_results:
+            raise HTTPException(status_code=404, detail=f"Movie with TMDB ID {request.tmdbId} not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error looking up movie: {e}")
+
+    # The first result is usually the correct one
+    try:
+        movie_to_add = lookup_results[0]
+    except IndexError:
+        raise HTTPException(status_code=404, detail=f"Movie with TMDB ID {request.tmdbId} not found in lookup results.")
+
+    # Set the quality profile and root folder path
+    movie_to_add["qualityProfileId"] = request.qualityProfileId
+    movie_to_add["rootFolderPath"] = request.rootFolderPath
+    movie_to_add["monitored"] = True
+    movie_to_add["addOptions"] = {"searchForMovie": True}
+
+    # Add the movie to Radarr
+    added_movie = await radarr_api_call(instance, "movie", method="POST", json_data=movie_to_add)
+    return added_movie
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Radarr download queue")
 async def get_download_queue(instance: dict = Depends(get_radarr_instance)):
