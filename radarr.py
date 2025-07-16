@@ -20,7 +20,6 @@ class Movie(BaseModel):
     statistics: dict = {}
 
 class MoveMovieRequest(BaseModel):
-    pass
     rootFolderPath: str = Field(..., description="The new root folder path for the movie.")
 
 class QueueItem(BaseModel):
@@ -185,7 +184,7 @@ async def get_download_history(instance: dict = Depends(get_radarr_instance)):
     # The actual history items are in the 'records' key
     return history_data.get("records", [])
 
-@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Radarr queue", operation_id="delete_queue_item")
+@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Radarr queue", operation_id="delete_radarr_queue_item")
 async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_radarr_instance)):
     """Deletes an item from the Radarr download queue. Optionally, it can also remove the item from the download client."""
     params = {"removeFromClient": str(removeFromClient).lower()}
@@ -197,7 +196,7 @@ class QualityProfile(BaseModel):
     name: str
 
 class UpdateMovieRequest(BaseModel):
-    """Request model for updating movie properties"""\
+    """Request model for updating movie properties"""
     monitored: Optional[bool] = None
     qualityProfileId: Optional[int] = None
     minimumAvailability: Optional[str] = None
@@ -217,13 +216,16 @@ async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dic
     if request.monitored is not None:
         movie_data["monitored"] = request.monitored
     if request.qualityProfileId is not None:
+        movie_data["qualityProfileId"] = request.qualityProfileId
     if request.minimumAvailability is not None:
         movie_data["minimumAvailability"] = request.minimumAvailability
     if request.tags is not None:
         movie_data["tags"] = request.tags
     if request.rootFolderPath is not None:
+        # This is not the correct way to move a movie in Radarr.
+        # The move_movie endpoint should be used instead.
+        # We are only updating the rootFolderPath property here.
         movie_data["rootFolderPath"] = request.rootFolderPath
-        movie_data["qualityProfileId"] = request.qualityProfileId
 
     # Send the updated object back to Radarr
     return await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
@@ -239,72 +241,6 @@ async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
 async def get_root_folders(instance: dict = Depends(get_radarr_instance)):
     """Get all configured root folders in Radarr."""
     return await radarr_api_call(instance, "rootfolder")
-
-@router.get("/tags", summary="Get all tags from Radarr")
-async def get_tags(
-    instance_config: dict = Depends(get_radarr_instance),
-):
-    """Get all tags configured in Radarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to fetch tags: {response.text}"
-        )
-    
-    return response.json()
-
-@router.post("/tags", summary="Create a new tag in Radarr")
-async def create_tag(
-    label: str,
-    instance_config: dict = Depends(get_radarr_instance),
-):
-    """Create a new tag in Radarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    payload = {"label": label}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
-    
-    if response.status_code != 201:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to create tag: {response.text}"
-        )
-    
-    return response.json()
-
-@router.delete("/tags/{tag_id}", status_code=204, operation_id="delete_radarr_tag", summary="Delete a tag from Radarr")
-async def delete_tag(
-    tag_id: int,
-    instance_config: dict = Depends(get_radarr_instance),
-):
-    """Delete a tag from Radarr by its ID."""
-    url = f"{instance_config['url']}/api/v3/tag/{tag_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.delete(url, headers=headers)
-        
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Tag with ID {tag_id} not found"
-            )
-        elif response.status_code != 200 and response.status_code != 204:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"Failed to delete tag: {response.text}"
-            )
-        
-        return
-
 
 # Helper function to get tag map
 async def get_tag_map(instance_config: dict) -> dict:

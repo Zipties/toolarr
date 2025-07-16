@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -53,3 +53,20 @@ async def startup_event():
 async def root():
     """Basic health check endpoint."""
     return {"status": "healthy", "service": "toolarr-server"}
+# Diagnostic endpoint to catch any unmatched requests
+@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def catch_all(path: str, request: Request):
+    body = None
+    try:
+        body = await request.json()
+    except:
+        body = await request.body()
+    
+    print(f"UNMATCHED REQUEST: {request.method} /{path}")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Body: {body}")
+    
+    raise HTTPException(
+        status_code=404,
+        detail=f"No endpoint found for {request.method} /{path}. This might be an AI routing issue."
+    )
