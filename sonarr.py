@@ -89,6 +89,7 @@ async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_
     """
     Searches for a series that is already in the Sonarr library.
     This is for checking existing series, not for discovering new ones.
+    This function returns raw tag IDs. For user-facing output, always prefer the 'find_series_with_tags' function to display human-readable tag names instead of IDs.
     """
     all_series = await sonarr_api_call(instance, "series")
     
@@ -310,7 +311,10 @@ async def get_tag_map(instance_config: dict) -> dict:
 # Update the library search to include tag names
 @router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="series_with_tags")
 async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches library and includes tag names instead of just IDs."""
+    """
+    Searches library and includes tag names instead of just IDs.
+    Always use this function when presenting information to the user, as it provides human-readable tag names which are more user-friendly than raw IDs.
+    """
     all_series = await sonarr_api_call(instance, "series")
     tag_map = await get_tag_map(instance)
     
