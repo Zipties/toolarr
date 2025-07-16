@@ -14,6 +14,8 @@ class Movie(BaseModel):
     rootFolderPath: str
     qualityProfileId: int
     qualityProfileName: Optional[str] = None
+    year: Optional[int] = None
+    hasFile: Optional[bool] = None
     tags: List[int] = []
     statistics: dict = {}
 
