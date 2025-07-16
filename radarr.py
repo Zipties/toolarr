@@ -157,9 +157,8 @@ async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: di
     # This is a command, not a simple PUT on the movie object
     await radarr_api_call(instance, "movie/editor", method="PUT", json_data=move_payload)
     
-    # Return the updated movie details
-    updated_movie = await radarr_api_call(instance, f"movie/{movie_id}")
-    return updated_movie
+    # Return a confirmation message
+    return {"message": f"Move command initiated for movie {movie_id}."}
 
 class AddMovieRequest(BaseModel):
     title: Optional[str] = None
