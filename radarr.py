@@ -197,12 +197,17 @@ class QualityProfile(BaseModel):
     name: str
 
 class UpdateMovieRequest(BaseModel):
-    pass
-
+    """Request model for updating movie properties"""\
+    monitored: Optional[bool] = None\
+    qualityProfileId: Optional[int] = None\
+    minimumAvailability: Optional[str] = None\
+    tags: Optional[List[int]] = None\
+    rootFolderPath: Optional[str] = None
 class UpdateTagsRequest(BaseModel):
     tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the movie")
 
 
+@router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Updates properties of a specific movie, such as monitoring status or quality profile."""
     # First, get the full movie object
@@ -212,6 +217,12 @@ async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dic
     if request.monitored is not None:
         movie_data["monitored"] = request.monitored
     if request.qualityProfileId is not None:
+    if request.minimumAvailability is not None:
+        movie_data["minimumAvailability"] = request.minimumAvailability
+    if request.tags is not None:
+        movie_data["tags"] = request.tags
+    if request.rootFolderPath is not None:
+        movie_data["rootFolderPath"] = request.rootFolderPath
         movie_data["qualityProfileId"] = request.qualityProfileId
 
     # Send the updated object back to Radarr
@@ -370,7 +381,7 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a MOVIE in Radarr", operation_id="radarr_update_tags")
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie in Radarr (NOT for TV shows)", operation_id="update_movie_tags_radarr")
 async def update_movie_tags(
     movie_id: int,
     request: UpdateTagsRequest,
