@@ -1,6 +1,16 @@
 # Changelog
 
-## [1.5.0] - 2025-07-16
+## [1.6.0] - 2025-07-16
+
+### Features
+- Added an endpoint to monitor and unmonitor movies in Radarr.
+- Added endpoints to monitor and unmonitor series and individual seasons in Sonarr.
+
+### Bug Fixes
+- Fixed a bug where unmonitoring a series in Sonarr would not cascade the change to all seasons.
+- Added explicit `operationId`s to new endpoints to prevent issues with auto-generated names being too long.
+
+### [1.5.0] - 2025-07-16
 
 ### Features
 - Added an endpoint to delete movies from Radarr.
