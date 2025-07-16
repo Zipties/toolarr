@@ -446,3 +446,24 @@ async def update_movie_tags(
             )
         
         return update_response.json()
+
+@router.delete("/movie/{movie_id}", status_code=204, summary="Delete a movie from Radarr", operation_id="delete_radarr_movie")
+async def delete_movie(
+    movie_id: int,
+    deleteFiles: bool = True,
+    addImportExclusion: bool = False,
+    instance: dict = Depends(get_radarr_instance)
+):
+    """
+    Deletes a movie from Radarr.
+
+    - **movie_id**: The ID of the movie to delete.
+    - **deleteFiles**: If `True`, the movie file will be deleted from the disk.
+    - **addImportExclusion**: If `True`, an import exclusion will be added for this movie.
+    """
+    params = {
+        "deleteFiles": str(deleteFiles).lower(),
+        "addImportExclusion": str(addImportExclusion).lower()
+    }
+    await radarr_api_call(instance, f"movie/{movie_id}", method="DELETE", params=params)
+    return
