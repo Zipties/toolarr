@@ -301,6 +301,8 @@ class UpdateMovieRequest(BaseModel):
 class UpdateTagsRequest(BaseModel):
     tags: List[int] = Field(..., description="List of tag IDs to assign to the movie")
 
+class MonitorRequest(BaseModel):
+    monitored: bool
 
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
@@ -450,6 +452,16 @@ async def update_movie_tags(
             )
         
         return update_response.json()
+
+@router.put("/movie/{movie_id}/monitor", status_code=200, summary="Update monitoring status for a movie", operation_id="monitor_radarr_movie")
+async def monitor_movie(movie_id: int, request: MonitorRequest, instance: dict = Depends(get_radarr_instance)):
+    """
+    Updates the monitoring status for a movie.
+    """
+    movie_data = await radarr_api_call(instance, f"movie/{movie_id}")
+    movie_data["monitored"] = request.monitored
+    updated_movie = await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
+    return updated_movie
 
 @router.delete("/movie/{movie_id}", status_code=200, summary="Delete a movie from Radarr", operation_id="delete_radarr_movie")
 async def delete_movie(
