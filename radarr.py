@@ -330,7 +330,7 @@ async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_i
     return filtered_movies
 
 # Tag management endpoints
-@router.get("/tags", summary="Get all tags from Radarr", operation_id="get_tags")
+@router.get("/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
 ):
@@ -349,7 +349,7 @@ async def get_tags(
     
     return response.json()
 
-@router.post("/tags", summary="Create a new tag in Radarr", operation_id="create_tag") 
+@router.post("/tags", summary="Create a new tag in Radarr", operation_id="radarr_create_tag") 
 async def create_tag(
     label: str,
     instance_config: dict = Depends(get_radarr_instance),
@@ -370,7 +370,7 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a MOVIE in Radarr", operation_id="update_tags")
+@router.put("/movie/{movie_id}/tags", summary="Update tags for a MOVIE in Radarr", operation_id="radarr_update_tags")
 async def update_movie_tags(
     movie_id: int,
     request: UpdateTagsRequest,
