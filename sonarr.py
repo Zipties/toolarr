@@ -76,7 +76,7 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             
             response.raise_for_status()
             # For DELETE requests that return no content
-            if response.status_code == 204:
+            if response.status_code == 204 or not response.text:
                 return None
             return response.json()
         except httpx.HTTPStatusError as e:
