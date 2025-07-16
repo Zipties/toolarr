@@ -81,7 +81,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             response.raise_for_status()
             
             # Handle successful empty responses
-            if response.status_code == 204:
+            if response.status_code == 204 or not response.text:
                 return None
                 
             return response.json()
