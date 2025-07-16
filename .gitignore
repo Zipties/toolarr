@@ -40,3 +40,5 @@ HANDOVER.md
 GEMINI.md
 HANDOVER.md
 CONFIGURATION.md
+*.json
+monitoring_notes.md
