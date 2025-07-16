@@ -459,3 +459,24 @@ async def update_series_tags(
             )
         
         return update_response.json()
+
+@router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
+async def delete_series(
+    series_id: int,
+    deleteFiles: bool = True,
+    addImportExclusion: bool = False,
+    instance: dict = Depends(get_sonarr_instance)
+):
+    """
+    Deletes a series from Sonarr.
+
+    - **series_id**: The ID of the series to delete.
+    - **deleteFiles**: If `True`, the series folder and all its contents will be deleted.
+    - **addImportExclusion**: If `True`, an import exclusion will be added for this series.
+    """
+    params = {
+        "deleteFiles": str(deleteFiles).lower(),
+        "addImportListExclusion": str(addImportExclusion).lower()
+    }
+    await sonarr_api_call(instance, f"series/{series_id}", method="DELETE", params=params)
+    return {"message": f"Series with ID {series_id} has been deleted."}
