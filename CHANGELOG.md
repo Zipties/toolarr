@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.2] - 2025-07-16
+
+### Bug Fixes
+- Corrected the payload for the `move_movie` function in Radarr, which was causing the move operation to fail.
+
 ## [1.6.0] - 2025-07-16
 
 ### Features
