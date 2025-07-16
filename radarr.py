@@ -80,7 +80,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
-            print(f"Radarr API response: {response.status_code} {response.text}")
+            print(f"Radarr API response: {response.status_code}")
             response.raise_for_status()
             
             # Handle successful empty responses
@@ -143,10 +143,10 @@ async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: di
     # Radarr's move logic is different from Sonarr's.
     # It requires a separate "movie/editor" endpoint.
     move_payload = {
-        "movieIds": [movie_id],
-        "targetRootFolderId": 0, # Placeholder, needs to be looked up
-        "moveFiles": True
-    }
+            "movieIds": [movie_id],
+            "rootFolderPath": move_request.rootFolderPath,
+            "moveFiles": True,
+        }
     
     # We need to get the ID of the destination root folder.
     root_folders = await radarr_api_call(instance, "rootfolder")

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   toolarr:
-    image: 192.168.45.15:5000/toolarr:build-1752680923
+    image: 192.168.45.15:5000/toolarr:v1.6.2
     env_file: .env
     networks:
       - traefik_public
