@@ -15,6 +15,8 @@ class Series(BaseModel):
     qualityProfileId: int
     qualityProfileName: Optional[str] = None
     languageProfileId: int
+    year: Optional[int] = None
+    seriesType: Optional[str] = None
     tags: List[int] = []
     statistics: dict = {}
     seasons: List[dict] = []
