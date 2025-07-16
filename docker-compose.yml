@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   toolarr:
-    image: 192.168.45.15:5000/toolarr:fix3
+    image: 192.168.45.15:5000/toolarr:latest
     
     # Option 1: Use environment variables from .env file (recommended)
     env_file: .env
