@@ -1,3 +1,5 @@
+<img width="1310" height="1626" alt="vivaldi_oSan3uImz1" src="https://github.com/user-attachments/assets/6e8ea6cf-f0f7-43ac-8f65-ea7d62567bf0" />
+                                  
 # Toolarr: Sonarr & Radarr API Bridge for AI
 
 Toolarr exposes a clean, tool-friendly API that allows AI assistants (like Open WebUI) to manage your Sonarr and Radarr media libraries using natural language.
