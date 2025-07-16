@@ -172,7 +172,7 @@ async def get_download_history(instance: dict = Depends(get_sonarr_instance)):
     # The actual history items are in the 'records' key
     return history_data.get("records", [])
 
-@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Sonarr queue")
+@router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Sonarr queue", operation_id="delete_queue_item")
 async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_sonarr_instance)):
     """Deletes an item from the Sonarr download queue. Optionally, it can also remove the item from the download client."""
     params = {"removeFromClient": str(removeFromClient).lower()}

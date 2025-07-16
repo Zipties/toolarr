@@ -18,8 +18,8 @@ services:
     #   RADARR_INSTANCE_1_API_KEY: ${RADARR_INSTANCE_1_API_KEY}
     
     # Uncomment to expose the service directly (not needed if using Traefik)
-    # ports:
-    #   - "8000:8000"
+    ports:
+      - "8010:8000"
     
     networks:
       - traefik_public
