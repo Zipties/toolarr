@@ -65,6 +65,14 @@ SONARR_INSTANCE_2_API_KEY=your_4k_api_key
 - Move content between folders
 - Update series monitoring
 
+### Media Management
+- Add new movies and TV shows to your library
+- Delete movies and TV shows, including their files
+
+### Tag Management
+- Create, view, and delete tags
+- Assign tags to media
+
 ### Queue Management
 - View download queues
 - Check download history
