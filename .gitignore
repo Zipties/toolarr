@@ -42,3 +42,14 @@ HANDOVER.md
 CONFIGURATION.md
 *.json
 monitoring_notes.md
+
+# Documentation and local development files
+CHANGELOG.md
+karakeep_api_docs.md
+quick-deploy.sh
+README.md
+test_results.md
+.github/
+api_docs/
+sonarr.py.new
+
