@@ -474,6 +474,11 @@ async def monitor_series(series_id: int, request: MonitorRequest, instance: dict
     """
     series_data = await sonarr_api_call(instance, f"series/{series_id}")
     series_data["monitored"] = request.monitored
+    
+    # Cascade the monitoring status to all seasons
+    for season in series_data.get("seasons", []):
+        season["monitored"] = request.monitored
+        
     updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
     return updated_series
 
