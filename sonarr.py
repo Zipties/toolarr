@@ -261,7 +261,7 @@ async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_i
     return filtered_series
 
 # Tag management endpoints
-@router.get("/tags", summary="Get all tags from Sonarr", operation_id="get_tags")
+@router.get("/tags", summary="Get all tags from Sonarr", operation_id="sonarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
@@ -285,7 +285,7 @@ async def get_root_folders(instance: dict = Depends(get_sonarr_instance)):
     """Get all configured root folders in Sonarr."""
     return await sonarr_api_call(instance, "rootfolder")
 
-@router.post("/tags", summary="Create a new tag in Sonarr", operation_id="create_tag")
+@router.post("/tags", summary="Create a new tag in Sonarr", operation_id="sonarr_create_tag")
 async def create_tag(
     label: str,
     instance_config: dict = Depends(get_sonarr_instance),
@@ -359,7 +359,7 @@ async def update_series_properties(
     # Send update
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
 
-@router.put("/series/{series_id}/tags", summary="Update tags for a TV SERIES in Sonarr", operation_id="update_tags")
+@router.put("/series/{series_id}/tags", summary="Update tags for a TV SERIES in Sonarr", operation_id="sonarr_update_tags")
 async def update_series_tags(
     series_id: int,
     request: UpdateTagsRequest,
