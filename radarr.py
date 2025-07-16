@@ -46,6 +46,9 @@ class HistoryItem(BaseModel):
     status: Optional[str] = None
     date: str
 
+class ConfirmationMessage(BaseModel):
+    message: str
+
 # Radarr API Router
 router = APIRouter(
     prefix="/radarr/{instance_name}",
@@ -132,7 +135,7 @@ async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance))
     encoded_term = quote(term)
     return await radarr_api_call(instance, f"movie/lookup?term={encoded_term}")
 
-@router.put("/movie/{movie_id}/move", response_model=Movie, summary="Move movie to new folder")
+@router.put("/movie/{movie_id}/move", response_model=ConfirmationMessage, summary="Move movie to new folder")
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Moves a movie to a new root folder and triggers Radarr to move the files."""
     movie = await radarr_api_call(instance, f"movie/{movie_id}")
