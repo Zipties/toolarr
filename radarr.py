@@ -198,10 +198,10 @@ class QualityProfile(BaseModel):
 
 class UpdateMovieRequest(BaseModel):
     """Request model for updating movie properties"""\
-    monitored: Optional[bool] = None\
-    qualityProfileId: Optional[int] = None\
-    minimumAvailability: Optional[str] = None\
-    tags: Optional[List[int]] = None\
+    monitored: Optional[bool] = None
+    qualityProfileId: Optional[int] = None
+    minimumAvailability: Optional[str] = None
+    tags: Optional[List[int]] = None
     rootFolderPath: Optional[str] = None
 class UpdateTagsRequest(BaseModel):
     tag_ids: List[int] = Field(..., description="List of tag IDs to assign to the movie")
