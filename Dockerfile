@@ -11,6 +11,7 @@ COPY main.py /app/main.py
 COPY instance_endpoints.py /app/instance_endpoints.py
 COPY sonarr.py /app/sonarr.py
 COPY radarr.py /app/radarr.py
+COPY common-client.py /app/common-client.py
 
 # Expose port
 EXPOSE 8000
