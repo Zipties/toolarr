@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   toolarr:
-    image: 192.168.45.15:5000/toolarr:v1.6.2
+    image: 192.168.45.15:5000/toolarr:ea7ceed #ghcr.io/zipties/toolarr:latest 
     env_file: .env
     networks:
       - traefik_public
@@ -12,7 +12,21 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+      labels:
+          - "traefik.enable=true"
 
+          # Host rule and entrypoint for toolarr
+          - "traefik.http.routers.toolarr.rule=Host(`toolarr.moderncaveman.us`)"
+          - "traefik.http.routers.toolarr.entrypoints=websecure"
+
+          # TLS configuration for toolarr
+          - "traefik.http.routers.toolarr.tls=true"
+          - "traefik.http.routers.toolarr.tls.certresolver=letsencrypt"
+
+          # Service definition for toolarr
+          - "traefik.http.services.toolarr.loadbalancer.server.port=8000"
+          - "traefik.http.services.toolarr.loadbalancer.responseforwarding.flushinterval=100ms"
+          - "traefik.http.routers.toolarr.service=toolarr"
 networks:
   traefik_public:
     external: true

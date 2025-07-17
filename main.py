@@ -1,18 +1,17 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sonarr import router as sonarr_router
-from instance_endpoints import instances_router
 from radarr import router as radarr_router
-
+from instance_endpoints import instances_router
 
 # --- App Initialization ---
 app = FastAPI(
     title="Toolarr: Sonarr and Radarr API Tool Server",
-    version="2.0.0",
-    description="OpenAPI server for Sonarr and Radarr integration with Open WebUI",
+    version="3.0.0",
+    description="A refactored, consolidated, and optimized API for managing Sonarr and Radarr, designed for AI tool integration.",
     servers=[
         {
             "url": "https://toolarr.moderncaveman.us",
@@ -24,14 +23,14 @@ app = FastAPI(
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development - restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- Security ---
-TOOL_API_KEY = os.environ.get("TOOL_API_KEY", "")
+TOOL_API_KEY = os.environ.get("TOOL_API_KEY", "changeme") # Added default for safety
 bearer_scheme = HTTPBearer()
 
 def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
@@ -44,36 +43,13 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
     return credentials.credentials
 
 # --- Routers ---
-# Include the Sonarr and Radarr routers, with security dependency
+# Include the refactored routers with security dependency
 app.include_router(sonarr_router, dependencies=[Depends(verify_api_key)])
 app.include_router(radarr_router, dependencies=[Depends(verify_api_key)])
 app.include_router(instances_router, dependencies=[Depends(verify_api_key)])
-
-# --- Startup Event ---
-@app.on_event("startup")
-async def startup_event():
-    pass
 
 # --- Root Endpoint ---
 @app.get("/", summary="Health check")
 async def root():
     """Basic health check endpoint."""
-    return {"status": "healthy", "service": "toolarr-server"}
-
-# Diagnostic endpoint to catch any unmatched requests
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def catch_all(path: str, request: Request):
-    body = None
-    try:
-        body = await request.json()
-    except:
-        body = await request.body()
-    
-    print(f"UNMATCHED REQUEST: {request.method} /{path}")
-    print(f"Headers: {dict(request.headers)}")
-    print(f"Body: {body}")
-    
-    raise HTTPException(
-        status_code=404,
-        detail=f"No endpoint found for {request.method} /{path}. This might be an AI routing issue."
-    )
+    return {"status": "healthy", "service": "toolarr-server-v3"}
