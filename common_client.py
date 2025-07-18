@@ -3,7 +3,7 @@ This module contains the shared client logic for communicating with
 Sonarr and Radarr APIs, and a base router for common endpoints.
 """
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import httpx
 
 # --- Generic API Client ---
