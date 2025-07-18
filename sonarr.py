@@ -173,20 +173,22 @@ async def search_episode(
     await api_call(instance, "command", method="POST", json_data=command_payload)
     return {"message": f"Search triggered for episode ID {episode_id} in series {series_id}."}
 
-@router.post("/series/{series_id}/fix", summary="Delete and re-add a series to force a fresh download of all episodes")
+
+@router.post("/series/{series_id}/fix", summary="Fix entire series: delete and re-add series to force all episodes to be redownloaded")
 async def fix_series(
     series_id: int,
     instance: dict = Depends(get_sonarr_instance),
 ):
     """
-    Fix a corrupted or incomplete series by deleting it (and files), then re-adding it by TVDB ID and triggering a fresh download.
+    Fixes an entire series: deletes the series (and all files), then re-adds it and triggers download of all episodes.
 
     AI GUIDANCE:
-    - Use this if the series already exists but episodes are corrupted/missing and cannot be re-downloaded normally.
-    - This deletes the series and all files, then re-adds and triggers a download.
-    - Do not use if you only want to search for missing episodes—use /{series_id}/search for that.
+    - Use ONLY if multiple episodes in the show are corrupted, missing, or cannot be fixed by per-episode/season fix.
+    - This deletes the entire show and all its files, then re-adds and triggers a download for everything.
+    - THIS WILL REMOVE ALL EXISTING FILES AND METADATA FOR THE SERIES!
+    - For smaller problems, use the episode or season fix endpoints instead.
     """
-    # 1. Lookup the series
+    # Lookup and collect all info
     series = await api_call(instance, f"series/{series_id}")
     if not series:
         raise HTTPException(status_code=404, detail="Series not found in Sonarr")
@@ -199,13 +201,13 @@ async def fix_series(
     if not all([tvdb_id, quality_profile_id, language_profile_id, root_folder_path]):
         raise HTTPException(status_code=400, detail="Missing necessary data to re-add series")
 
-    # 2. Delete the series (and all files)
+    # Delete series (and files)
     await api_call(instance, f"series/{series_id}", method="DELETE", params={
         "deleteFiles": "true",
         "addImportExclusion": "false"
     })
 
-    # 3. Re-add the series
+    # Re-add
     add_payload = {
         "tvdbId": tvdb_id,
         "title": title,
@@ -218,6 +220,69 @@ async def fix_series(
     }
     added_series = await api_call(instance, "series", method="POST", json_data=add_payload)
     return {"message": f"Series '{title}' was deleted and is being re-downloaded.", "series": added_series}
+
+
+@router.post("/series/{series_id}/season/{season_number}/fix", summary="Fix an entire season: delete and redownload all episodes in a season")
+async def fix_season(
+    series_id: int,
+    season_number: int,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """
+    Fixes a season: deletes all episode files in a season, then triggers a season-level search/download.
+
+    AI GUIDANCE:
+    - Use this if an entire season is corrupted/missing, but the rest of the show is fine.
+    - This will DELETE ALL FILES for the specified season ONLY, then trigger a re-download for that season.
+    - Do NOT use if only one episode is affected—use the episode fix endpoint.
+    - For problems across the whole show, use the series fix endpoint.
+    """
+    # Lookup episodes in season
+    series = await api_call(instance, f"series/{series_id}")
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found in Sonarr")
+    all_episodes = await api_call(instance, f"episode?seriesId={series_id}")
+    season_episodes = [ep for ep in all_episodes if ep.get("seasonNumber") == season_number]
+    if not season_episodes:
+        raise HTTPException(status_code=404, detail=f"No episodes found for season {season_number}.")
+
+    # Delete all episode files in season
+    for ep in season_episodes:
+        if ep.get("hasFile"):
+            await api_call(instance, f"episode/{ep['id']}", method="DELETE", params={"deleteFiles": "true"})
+
+    # Trigger season-level search (downloads missing/corrupt files)
+    command_payload = {"name": "SeasonSearch", "seriesId": series_id, "seasonNumber": season_number}
+    await api_call(instance, "command", method="POST", json_data=command_payload)
+    return {"message": f"Season {season_number} of series '{series['title']}' is being re-downloaded."}
+
+
+@router.post("/series/{series_id}/episode/{episode_id}/fix", summary="Fix a single episode: delete and redownload")
+async def fix_episode(
+    series_id: int,
+    episode_id: int,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """
+    Fixes an episode: deletes the file for a specific episode, then triggers an episode-level search/download.
+
+    AI GUIDANCE:
+    - Use this for a single corrupted/missing episode in a show.
+    - This will DELETE the file for the specified episode ONLY, then trigger a re-download.
+    - Use the season fix for entire seasons, or series fix for the whole show.
+    - NEVER use for episodes that are fine, as it will force a new download.
+    """
+    # Delete episode file if present
+    episode = await api_call(instance, f"episode/{episode_id}")
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found in Sonarr")
+    if episode.get("hasFile"):
+        await api_call(instance, f"episode/{episode_id}", method="DELETE", params={"deleteFiles": "true"})
+
+    # Trigger episode-level search
+    command_payload = {"name": "EpisodeSearch", "episodeIds": [episode_id]}
+    await api_call(instance, "command", method="POST", json_data=command_payload)
+    return {"message": f"Episode '{episode.get('title', '')}' (ID {episode_id}) is being re-downloaded."}
 
 @router.post("/command", summary="Execute a command on Sonarr")
 async def execute_sonarr_command(request: CommandRequest, instance: dict = Depends(get_sonarr_instance)):
