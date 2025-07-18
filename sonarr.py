@@ -353,11 +353,6 @@ async def get_tags(
     
     return response.json()
 
-@router.get("/rootfolders", operation_id="get_sonarr_rootfolders", summary="Get root folders from Sonarr")
-async def get_root_folders(instance: dict = Depends(get_sonarr_instance)):
-    """Get all configured root folders in Sonarr."""
-    return await sonarr_api_call(instance, "rootfolder")
-
 @router.post("/sonarr/tags", summary="Create a new tag in Sonarr", operation_id="sonarr_create_tag")
 async def create_tag(
     label: str,
@@ -412,24 +407,25 @@ async def update_series_properties(
     instance: dict = Depends(get_sonarr_instance)
 ):
     """Update series properties like monitoring status, quality profile, tags, etc."""
-    # Get current series data
+    # If a new root folder is provided, handle the move operation.
+    if request.newRootFolderPath:
+        series = await sonarr_api_call(instance, f"series/{series_id}")
+        series_folder_name = os.path.basename(series["path"])
+        new_path = os.path.join(request.newRootFolderPath, series_folder_name)
+        
+        series["rootFolderPath"] = request.newRootFolderPath
+        series["path"] = new_path
+        series["moveFiles"] = request.moveFiles
+        
+        return await sonarr_api_call(instance, f"series/{series['id']}", method="PUT", json_data=series)
+
+    # Otherwise, perform a standard update.
     series_data = await sonarr_api_call(instance, f"series/{series_id}")
-    
-    # Update only provided fields
-    if request.monitored is not None:
-        series_data["monitored"] = request.monitored
-    if request.qualityProfileId is not None:
-        series_data["qualityProfileId"] = request.qualityProfileId
-    if request.languageProfileId is not None:
-        series_data["languageProfileId"] = request.languageProfileId  
-    if request.seasonFolder is not None:
-        series_data["seasonFolder"] = request.seasonFolder
-    if request.path is not None:
-        series_data["path"] = request.path
-    if request.tags is not None:
-        series_data["tags"] = request.tags
-    
-    # Send update
+    update_fields = request.dict(exclude_unset=True)
+    for key, value in update_fields.items():
+        if hasattr(series_data, key):
+            series_data[key] = value
+            
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
 
 @router.put("/series/{series_id}/tags", summary="Update tags for a TV show in Sonarr (NOT for movies)", operation_id="update_series_tags_sonarr")

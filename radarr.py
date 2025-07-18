@@ -309,25 +309,27 @@ class MonitorRequest(BaseModel):
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Updates properties of a specific movie, such as monitoring status or quality profile."""
-    # First, get the full movie object
+    # If a new root folder is provided, handle the move operation.
+    if request.newRootFolderPath:
+        move_payload = {
+            "movieIds": [movie_id],
+            "rootFolderPath": request.newRootFolderPath,
+            "moveFiles": request.moveFiles,
+        }
+        root_folders = await radarr_api_call(instance, "rootfolder")
+        target_folder = next((rf for rf in root_folders if rf["path"] == request.newRootFolderPath), None)
+        if not target_folder:
+            raise HTTPException(status_code=400, detail=f"Root folder '{request.newRootFolderPath}' not found in Radarr.")
+        move_payload["targetRootFolderId"] = target_folder["id"]
+        return await radarr_api_call(instance, "movie/editor", method="PUT", json_data=move_payload)
+
+    # Otherwise, perform a standard update.
     movie_data = await radarr_api_call(instance, f"movie/{movie_id}")
-
-    # Update fields if they were provided in the request
-    if request.monitored is not None:
-        movie_data["monitored"] = request.monitored
-    if request.qualityProfileId is not None:
-        movie_data["qualityProfileId"] = request.qualityProfileId
-    if request.minimumAvailability is not None:
-        movie_data["minimumAvailability"] = request.minimumAvailability
-    if request.tags is not None:
-        movie_data["tags"] = request.tags
-    if request.rootFolderPath is not None:
-        # This is not the correct way to move a movie in Radarr.
-        # The move_movie endpoint should be used instead.
-        # We are only updating the rootFolderPath property here.
-        movie_data["rootFolderPath"] = request.rootFolderPath
-
-    # Send the updated object back to Radarr
+    update_fields = request.dict(exclude_unset=True)
+    for key, value in update_fields.items():
+        if hasattr(movie_data, key):
+            movie_data[key] = value
+            
     return await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
 
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for movies in Radarr")
@@ -356,28 +358,6 @@ async def get_tag_map(instance_config: dict) -> dict:
     
     tags = response.json()
     return {tag['id']: tag['label'] for tag in tags}
-
-# Update the library search to include tag names
-@router.get("/library/with-tags", summary="Find movies with tag names", operation_id="movies_with_tags")
-async def find_movies_with_tags(term: str, instance: dict = Depends(get_radarr_instance)):
-    """
-    Searches library and includes tag names instead of just IDs.
-    Always use this function when presenting information to the user, as it provides human-readable tag names which are more user-friendly than raw IDs.
-    """
-    all_movies = await radarr_api_call(instance, "movie")
-    tag_map = await get_tag_map(instance)
-    
-    filtered_movies = []
-    for m in all_movies:
-        if term.lower() in m.get("title", "").lower():
-            # Add tag names
-            if "tags" in m and m["tags"]:
-                m["tagNames"] = [tag_map.get(tag_id, f"Unknown tag {tag_id}") for tag_id in m["tags"]]
-            else:
-                m["tagNames"] = []
-            filtered_movies.append(m)
-    
-    return filtered_movies
 
 # Tag management endpoints
 @router.get("/radarr/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
