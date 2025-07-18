@@ -97,6 +97,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
 async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
     """
     Searches for a movie that is already in the Radarr library.
+    Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
     This is for checking existing movies, not for discovering new ones.
     This function returns raw tag IDs. For user-facing output, always prefer the 'find_movies_with_tags' function to display human-readable tag names instead of IDs.
     """
@@ -119,7 +120,8 @@ async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_i
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a movie by term and returns the TMDB ID."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Searches for a movie by term and returns the TMDB ID."""
     try:
         return await radarr_api_call(instance, "movie/lookup", params={"term": term})
     except Exception as e:
@@ -128,7 +130,7 @@ async def search_movie(term: str, instance: dict = Depends(get_radarr_instance))
 
 @router.get("/lookup", summary="Search for a new movie to add to Radarr")
 async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
     Searches for a new movie by a search term.
     This is the first step to add a new movie, as it provides the necessary tmdbId.
     """
@@ -137,7 +139,8 @@ async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance))
 
 @router.put("/movie/{movie_id}/move", response_model=ConfirmationMessage, summary="Move movie to new folder")
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """Moves a movie to a new root folder and triggers Radarr to move the files."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Moves a movie to a new root folder and triggers Radarr to move the files."""
     movie = await radarr_api_call(instance, f"movie/{movie_id}")
     
     # Radarr's move logic is different from Sonarr's.
@@ -171,7 +174,8 @@ class AddMovieRequest(BaseModel):
 
 @router.post("/movie", response_model=Movie, summary="Add a new movie to Radarr")
 async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """Adds a new movie to Radarr by looking it up via its TMDB ID."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Adds a new movie to Radarr by looking it up via its TMDB ID."""
     # First, lookup the movie by TMDB ID
     try:
         movie_to_add = await radarr_api_call(instance, f"movie/lookup/tmdb?tmdbid={request.tmdbId}")
@@ -217,7 +221,7 @@ async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radar
 
 @router.post("/radarr/add_by_title", response_model=Movie, summary="Add a new movie to Radarr by title", operation_id="add_movie_by_title_radarr", tags=["internal-admin"])
 async def add_movie_by_title_radarr(title: str, instance: dict = Depends(get_radarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
     Adds a new movie to Radarr by looking it up by title.
     This is a one-shot command that handles the lookup and add process.
     """
@@ -270,21 +274,24 @@ async def add_movie_by_title_radarr(title: str, instance: dict = Depends(get_rad
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Radarr download queue")
 async def get_download_queue(instance: dict = Depends(get_radarr_instance)):
-    """Gets the list of items currently being downloaded or waiting to be downloaded by Radarr."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Gets the list of items currently being downloaded or waiting to be downloaded by Radarr."""
     queue_data = await radarr_api_call(instance, "queue")
     # The actual queue items are in the 'records' key
     return queue_data.get("records", [])
 
 @router.get("/history", response_model=List[HistoryItem], summary="Get Radarr download history")
 async def get_download_history(instance: dict = Depends(get_radarr_instance)):
-    """Gets the history of recently grabbed and imported downloads from Radarr."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Gets the history of recently grabbed and imported downloads from Radarr."""
     history_data = await radarr_api_call(instance, "history")
     # The actual history items are in the 'records' key
     return history_data.get("records", [])
 
 @router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Radarr queue", operation_id="delete_radarr_queue_item")
 async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_radarr_instance)):
-    """Deletes an item from the Radarr download queue. Optionally, it can also remove the item from the download client."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Deletes an item from the Radarr download queue. Optionally, it can also remove the item from the download client."""
     params = {"removeFromClient": str(removeFromClient).lower()}
     await radarr_api_call(instance, f"queue/{queue_id}", method="DELETE", params=params)
     return
@@ -308,7 +315,7 @@ class MonitorRequest(BaseModel):
 
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
     Updates properties of a specific movie, such as monitoring status or quality profile.
     Pass newRootFolderPath + moveFiles=true to relocate the files to another root folder.
     """
@@ -337,14 +344,16 @@ async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dic
 
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for movies in Radarr")
 async def get_quality_profiles(instance: dict = Depends(get_radarr_instance)):
-    """Retrieves quality profiles for MOVIES configured in Radarr. Only needed when managing quality profiles directly, not for checking a movie's quality profile."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Retrieves quality profiles for MOVIES configured in Radarr. Only needed when managing quality profiles directly, not for checking a movie's quality profile."""
     return await radarr_api_call(instance, "qualityprofile")
 
 # Tag endpoints for Radarr following API v3 spec
 
 @router.get("/rootfolders", operation_id="get_radarr_rootfolders", summary="Get root folders from Radarr")
 async def get_root_folders(instance: dict = Depends(get_radarr_instance)):
-    """Get all configured root folders in Radarr."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Get all configured root folders in Radarr."""
     return await radarr_api_call(instance, "rootfolder")
 
 # Helper function to get tag map
@@ -367,7 +376,8 @@ async def get_tag_map(instance_config: dict) -> dict:
 async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
 ):
-    """Get all tags configured in Radarr."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Get all tags configured in Radarr."""
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
@@ -387,7 +397,8 @@ async def create_tag(
     label: str,
     instance_config: dict = Depends(get_radarr_instance),
 ):
-    """Create a new tag in Radarr."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Create a new tag in Radarr."""
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     payload = {"label": label}
@@ -409,7 +420,8 @@ async def update_movie_tags(
     request: UpdateTagsRequest,
     instance_config: dict = Depends(get_radarr_instance),
 ):
-    """Update tags for a movie. This replaces all existing tags."""
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Update tags for a movie. This replaces all existing tags."""
     # First get the current movie data
     movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
     headers = {"X-Api-Key": instance_config["api_key"]}
@@ -440,13 +452,36 @@ async def update_movie_tags(
 
 @router.put("/movie/{movie_id}/monitor", status_code=200, summary="Update monitoring status for a movie", operation_id="monitor_radarr_movie")
 async def monitor_movie(movie_id: int, request: MonitorRequest, instance: dict = Depends(get_radarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
     Updates the monitoring status for a movie.
     """
     movie_data = await radarr_api_call(instance, f"movie/{movie_id}")
     movie_data["monitored"] = request.monitored
     updated_movie = await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
     return updated_movie
+
+
+@router.post("/movie/{movie_id}/fix", response_model=Movie, summary="Fix a movie by re-downloading it", operation_id="fix_radarr_movie")
+async def fix_movie(movie_id: int, instance: dict = Depends(get_radarr_instance)):
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Fixes a movie by deleting it, re-adding it, and triggering a new search.
+    This is a destructive action that will remove the current movie file.
+    """
+    # Get movie details to get the title
+    try:
+        movie = await radarr_api_call(instance, f"movie/{movie_id}")
+        title_to_add = movie["title"]
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"Movie with ID {movie_id} not found.")
+        raise e
+
+    # Delete the movie
+    await delete_movie(movie_id, deleteFiles=True, addImportExclusion=False, instance=instance)
+
+    # Re-add the movie by title
+    added_movie = await add_movie_by_title_radarr(title_to_add, instance)
+    return added_movie
 
 @router.delete("/movie/{movie_id}", status_code=200, summary="Delete a movie from Radarr", operation_id="delete_radarr_movie")
 async def delete_movie(
@@ -455,8 +490,8 @@ async def delete_movie(
     addImportExclusion: bool = False,
     instance: dict = Depends(get_radarr_instance)
 ):
-    """
-    Deletes a movie from Radarr.
+    """Before calling this endpoint, you should first call the `list_radarr_instances` endpoint to get the available `instance_name` values.
+    Deletes a movie from Radarr. To re-download the movie, you must call 'add_movie_by_title' or 'add_movie' afterwards.
 
     - **movie_id**: The ID of the movie to delete.
     - **deleteFiles**: If `True`, the movie file will be deleted from the disk.
@@ -468,3 +503,4 @@ async def delete_movie(
     }
     await radarr_api_call(instance, f"movie/{movie_id}", method="DELETE", params=params)
     return {"message": f"Movie with ID {movie_id} has been deleted."}
+

@@ -84,9 +84,26 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
 
+class Episode(BaseModel):
+    id: int
+    seriesId: int
+    episodeFileId: int
+    seasonNumber: int
+    episodeNumber: int
+    title: str
+    airDate: Optional[str] = None
+    monitored: bool
+
+@router.get("/series/{series_id}/episodes", response_model=List[Episode], summary="Get all episodes for a series", operation_id="get_sonarr_episodes")
+async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Retrieves all episodes for a given series.
+    """
+    return await sonarr_api_call(instance, "episode", params={"seriesId": series_id})
+
 @router.get("/library", response_model=List[Series], summary="Check if a series exists in the Sonarr library")
 async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Searches for a series that is already in the Sonarr library.
     This is for checking existing series, not for discovering new ones.
     This function returns raw tag IDs. For user-facing output, always prefer the 'find_series_with_tags' function to display human-readable tag names instead of IDs.
@@ -110,12 +127,13 @@ async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a new series by term and returns the TVDB ID."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Searches for a new series by term and returns the TVDB ID."""
     return await sonarr_api_call(instance, "series/lookup", params={"term": term})
 
 @router.get("/lookup", summary="Search for a new series to add to Sonarr")
 async def lookup_series(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Searches for a new series by a search term.
     This is the first step to add a new series, as it provides the necessary tvdbId.
     """
@@ -123,7 +141,8 @@ async def lookup_series(term: str, instance: dict = Depends(get_sonarr_instance)
 
 @router.put("/series/{sonarr_id}/move", response_model=Series, summary="Move series to new folder")
 async def move_series(sonarr_id: int, move_request: MoveSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
-    """Moves a series to a new root folder and triggers Sonarr to move the files."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Moves a series to a new root folder and triggers Sonarr to move the files."""
     series = await sonarr_api_call(instance, f"series/{sonarr_id}")
     series_folder_name = os.path.basename(series["path"])
     new_path = os.path.join(move_request.rootFolderPath, series_folder_name)
@@ -144,7 +163,8 @@ class AddSeriesRequest(BaseModel):
 
 @router.post("/series", response_model=Series, summary="Add a new series to Sonarr")
 async def add_series(request: AddSeriesRequest, instance: dict = Depends(get_sonarr_instance)):
-    """Adds a new series to Sonarr by looking it up via its TVDB ID."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Adds a new series to Sonarr by looking it up via its TVDB ID."""
     # First, lookup the series by TVDB ID
     try:
         series_to_add = await sonarr_api_call(instance, f"series/lookup?term=tvdb:{request.tvdbId}")
@@ -193,7 +213,7 @@ async def add_series(request: AddSeriesRequest, instance: dict = Depends(get_son
 
 @router.post("/sonarr/add_by_title", response_model=Series, summary="Add a new series to Sonarr by title", operation_id="add_series_by_title_sonarr")
 async def add_series_by_title_sonarr(title: str, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Adds a new series to Sonarr by looking it up by title.
     This is a one-shot command that handles the lookup and add process.
     """
@@ -249,21 +269,24 @@ async def add_series_by_title_sonarr(title: str, instance: dict = Depends(get_so
 
 @router.get("/queue", response_model=List[QueueItem], summary="Get Sonarr download queue")
 async def get_download_queue(instance: dict = Depends(get_sonarr_instance)):
-    """Gets the list of items currently being downloaded or waiting to be downloaded by Sonarr."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Gets the list of items currently being downloaded or waiting to be downloaded by Sonarr."""
     queue_data = await sonarr_api_call(instance, "queue")
     # The actual queue items are in the 'records' key
     return queue_data.get("records", [])
 
 @router.get("/history", response_model=List[HistoryItem], summary="Get Sonarr download history")
 async def get_download_history(instance: dict = Depends(get_sonarr_instance)):
-    """Gets the history of recently grabbed and imported downloads from Sonarr."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Gets the history of recently grabbed and imported downloads from Sonarr."""
     history_data = await sonarr_api_call(instance, "history")
     # The actual history items are in the 'records' key
     return history_data.get("records", [])
 
 @router.delete("/queue/{queue_id}", status_code=204, summary="Delete item from Sonarr queue", operation_id="delete_sonarr_queue_item")
 async def delete_from_queue(queue_id: int, removeFromClient: bool = True, instance: dict = Depends(get_sonarr_instance)):
-    """Deletes an item from the Sonarr download queue. Optionally, it can also remove the item from the download client."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Deletes an item from the Sonarr download queue. Optionally, it can also remove the item from the download client."""
     params = {"removeFromClient": str(removeFromClient).lower()}
     await sonarr_api_call(instance, f"queue/{queue_id}", method="DELETE", params=params)
     return
@@ -292,7 +315,8 @@ class MonitorRequest(BaseModel):
 
 @router.get("/qualityprofiles", response_model=List[QualityProfile], summary="Get quality profiles for TV SHOWS in Sonarr")
 async def get_quality_profiles(instance: dict = Depends(get_sonarr_instance)):
-    """Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Retrieves quality profiles for TV SHOWS configured in Sonarr. Only needed when managing quality profiles directly, not for checking a show's quality profile."""
     return await sonarr_api_call(instance, "qualityprofile")
 
 
@@ -314,7 +338,7 @@ async def get_tag_map(instance_config: dict) -> dict:
 # Update the library search to include tag names
 @router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="series_with_tags")
 async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Searches library and includes tag names instead of just IDs.
     Always use this function when presenting information to the user, as it provides human-readable tag names which are more user-friendly than raw IDs.
     """
@@ -338,7 +362,8 @@ async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_i
 async def get_tags(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
-    """Get all tags configured in Sonarr."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Get all tags configured in Sonarr."""
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
@@ -358,7 +383,8 @@ async def create_tag(
     label: str,
     instance_config: dict = Depends(get_sonarr_instance),
 ):
-    """Create a new tag in Sonarr."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Create a new tag in Sonarr."""
     url = f"{instance_config['url']}/api/v3/tag"
     headers = {"X-Api-Key": instance_config["api_key"]}
     payload = {"label": label}
@@ -379,7 +405,8 @@ async def delete_tag(
     tag_id: int,
     instance_config: dict = Depends(get_sonarr_instance),
 ):
-    """Delete a tag from Sonarr by its ID."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Delete a tag from Sonarr by its ID."""
     url = f"{instance_config['url']}/api/v3/tag/{tag_id}"
     headers = {"X-Api-Key": instance_config["api_key"]}
     
@@ -406,7 +433,7 @@ async def update_series_properties(
     request: UpdateSeriesRequest,
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Update series properties like monitoring status, quality profile, tags, etc.
     Pass newRootFolderPath + moveFiles=true to relocate the files to another root folder.
     """
@@ -437,7 +464,8 @@ async def update_series_tags(
     request: UpdateTagsRequest,
     instance_config: dict = Depends(get_sonarr_instance),
 ):
-    """Update tags for a series. This replaces all existing tags."""
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Update tags for a series. This replaces all existing tags."""
     # First get the current series data
     series_url = f"{instance_config['url']}/api/v3/series/{series_id}"
     headers = {"X-Api-Key": instance_config["api_key"]}
@@ -468,7 +496,7 @@ async def update_series_tags(
 
 @router.put("/series/{series_id}/monitor", status_code=200, summary="Update monitoring status for an entire series", operation_id="monitor_sonarr_series")
 async def monitor_series(series_id: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Updates the monitoring status for an entire series.
     """
     series_data = await sonarr_api_call(instance, f"series/{series_id}")
@@ -483,7 +511,7 @@ async def monitor_series(series_id: int, request: MonitorRequest, instance: dict
 
 @router.put("/series/{series_id}/seasons/{season_number}/monitor", status_code=200, summary="Update monitoring status for a single season", operation_id="monitor_sonarr_season", tags=["internal-admin"])
 async def monitor_season(series_id: int, season_number: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
-    """
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
     Updates the monitoring status for a single season of a series.
     """
     series_data = await sonarr_api_call(instance, f"series/{series_id}")
@@ -502,23 +530,68 @@ async def monitor_season(series_id: int, season_number: int, request: MonitorReq
     updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
     return updated_series
 
-@router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
-async def delete_series(
+
+@router.post("/series/{series_id}/fix", status_code=200, summary="Fix a series by replacing the current release", operation_id="fix_sonarr_release")
+async def fix_series_release(
     series_id: int,
+    episode_id: int,
+    instance: dict = Depends(get_sonarr_instance)
+):
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Fixes a downloaded episode by deleting the file and triggering a new search for a replacement.
+    To use this function, you must first call `get_episodes` to get the `episode_id` for the desired episode.
+    """
+    # 1. Delete the file
+    episode_files = await sonarr_api_call(instance, "episodefile", params={"seriesId": series_id})
+    files_to_delete = [f["id"] for f in episode_files if episode_id in f.get("episodeIds", [])]
+
+    for file_id in files_to_delete:
+        await sonarr_api_call(instance, f"episodefile/{file_id}", method="DELETE")
+
+    # 2. Trigger a new search for the episode
+    await sonarr_api_call(instance, "command", method="POST", json_data={"name": "EpisodeSearch", "episodeIds": [episode_id]})
+
+    return {"message": f"Successfully deleted the file for episode {episode_id} and triggered a new search."}
+
+
+@router.delete("/series/{series_id}", status_code=200, summary="Delete a series or a specific episode file from Sonarr", operation_id="delete_sonarr_series_or_episode")
+async def delete_series_or_episode(
+    series_id: int,
+    season_number: Optional[int] = None,
+    episode_number: Optional[int] = None,
     deleteFiles: bool = True,
     addImportExclusion: bool = False,
     instance: dict = Depends(get_sonarr_instance)
 ):
+    """Before calling this endpoint, you should first call the `list_sonarr_instances` endpoint to get the available `instance_name` values.
+    Deletes a whole series or just a specific episode file from Sonarr.
+    To delete a specific episode, provide the season_number and episode_number.
+    Otherwise, the entire series will be deleted.
     """
-    Deletes a series from Sonarr.
+    if season_number is not None and episode_number is not None:
+        # Find the episode_id
+        episodes = await sonarr_api_call(instance, "episode", params={"seriesId": series_id})
+        episode_to_delete = None
+        for episode in episodes:
+            if episode.get("seasonNumber") == season_number and episode.get("episodeNumber") == episode_number:
+                episode_to_delete = episode
+                break
+        
+        if not episode_to_delete or not episode_to_delete.get("hasFile"):
+            raise HTTPException(status_code=404, detail=f"Episode S{season_number:02d}E{episode_number:02d} not found or has no file.")
 
-    - **series_id**: The ID of the series to delete.
-    - **deleteFiles**: If `True`, the series folder and all its contents will be deleted.
-    - **addImportExclusion**: If `True`, an import exclusion will be added for this series.
-    """
-    params = {
-        "deleteFiles": str(deleteFiles).lower(),
-        "addImportListExclusion": str(addImportExclusion).lower()
-    }
-    await sonarr_api_call(instance, f"series/{series_id}", method="DELETE", params=params)
-    return {"message": f"Series with ID {series_id} has been deleted."}
+        # Delete the episode file
+        episode_file_id = episode_to_delete.get("episodeFileId")
+        if episode_file_id:
+            await sonarr_api_call(instance, f"episodefile/{episode_file_id}", method="DELETE")
+            return {"message": f"Successfully deleted file for episode S{season_number:02d}E{episode_number:02d}."}
+        else:
+            raise HTTPException(status_code=404, detail="Episode file ID not found.")
+    else:
+        # Delete the entire series
+        params = {
+            "deleteFiles": str(deleteFiles).lower(),
+            "addImportListExclusion": str(addImportExclusion).lower()
+        }
+        await sonarr_api_call(instance, f"series/{series_id}", method="DELETE", params=params)
+        return {"message": f"Series with ID {series_id} has been deleted."}
