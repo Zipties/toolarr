@@ -308,7 +308,10 @@ class MonitorRequest(BaseModel):
 
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """Updates properties of a specific movie, such as monitoring status or quality profile."""
+    """
+    Updates properties of a specific movie, such as monitoring status or quality profile.
+    Pass newRootFolderPath + moveFiles=true to relocate the files to another root folder.
+    """
     # If a new root folder is provided, handle the move operation.
     if request.newRootFolderPath:
         move_payload = {

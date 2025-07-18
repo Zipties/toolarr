@@ -406,7 +406,10 @@ async def update_series_properties(
     request: UpdateSeriesRequest,
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """Update series properties like monitoring status, quality profile, tags, etc."""
+    """
+    Update series properties like monitoring status, quality profile, tags, etc.
+    Pass newRootFolderPath + moveFiles=true to relocate the files to another root folder.
+    """
     # If a new root folder is provided, handle the move operation.
     if request.newRootFolderPath:
         series = await sonarr_api_call(instance, f"series/{series_id}")
