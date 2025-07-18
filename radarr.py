@@ -39,6 +39,7 @@ class CommandRequest(BaseModel):
 
 # This router inherits all common endpoints from BaseMediaRouter
 router = BaseMediaRouter(
+    dependency=get_radarr_instance,
     prefix="/radarr/{instance_name}",
     tags=["radarr"],
 )

@@ -44,6 +44,7 @@ class CommandRequest(BaseModel):
 # --- Sonarr Router ---
 
 router = BaseMediaRouter(
+    dependency=get_sonarr_instance,
     prefix="/sonarr/{instance_name}",
     tags=["sonarr"],
 )

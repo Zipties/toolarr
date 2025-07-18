@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   toolarr:
-    image: 192.168.45.15:5000/toolarr:f20019e #ghcr.io/zipties/toolarr:latest 
+    image: 192.168.45.15:5000/toolarr:51f882d #ghcr.io/zipties/toolarr:latest 
     env_file: .env
     networks:
       - traefik_public
