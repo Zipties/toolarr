@@ -18,4 +18,4 @@ EXPOSE 8000
 COPY prune_openapi.py /app/prune_openapi.py
 
 # Generate OpenAPI specs and run the application
-CMD ["sh", "-c", "python main.py && python prune_openapi.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python main.py && python prune_openapi.py && python -u -m uvicorn main:app --host 0.0.0.0 --port 8000"]

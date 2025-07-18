@@ -68,11 +68,9 @@ async def get_pruned_openapi():
 
 
 if __name__ == "__main__":
-    import uvicorn
     import json
     # This allows generating the openapi.json spec directly
     with open("openapi.json", "w") as f:
         json.dump(app.openapi(), f, indent=2)
     print("openapi.json generated")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
