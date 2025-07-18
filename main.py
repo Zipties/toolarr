@@ -60,20 +60,19 @@ async def root():
     """Basic health check endpoint."""
     return {"status": "healthy", "service": "toolarr-server"}
 
-# Diagnostic endpoint to catch any unmatched requests
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def catch_all(path: str, request: Request):
-    body = None
-    try:
-        body = await request.json()
-    except:
-        body = await request.body()
-    
-    print(f"UNMATCHED REQUEST: {request.method} /{path}")
-    print(f"Headers: {dict(request.headers)}")
-    print(f"Body: {body}")
-    
-    raise HTTPException(
-        status_code=404,
-        detail=f"No endpoint found for {request.method} /{path}. This might be an AI routing issue."
-    )
+@app.get("/openapi-chatgpt.json", include_in_schema=False)
+async def get_pruned_openapi():
+    """Serves the pruned OpenAPI spec for ChatGPT."""
+    with open("openapi-chatgpt.json", "r") as f:
+        return json.load(f)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    import json
+    # This allows generating the openapi.json spec directly
+    with open("openapi.json", "w") as f:
+        json.dump(app.openapi(), f, indent=2)
+    print("openapi.json generated")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

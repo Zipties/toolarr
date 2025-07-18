@@ -53,3 +53,4 @@ test_results.md
 api_docs/
 sonarr.py.new
 
+docker-compose.yml.build
