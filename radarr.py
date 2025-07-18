@@ -78,6 +78,12 @@ async def find_movie_in_library(term: str, include_tags: bool = False, instance:
 async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """
     Adds a new movie to Radarr by either its title or TMDB ID.
+
+    AI GUIDANCE:
+    - Before adding media, always check if it already exists in the library using the /library endpoint.
+    - If the media is not found, use this /add endpoint to add it (which also triggers an auto-download).
+    - If the media is found but missing files, use the manual /search endpoint for that specific item (by ID).
+    - Never attempt to add media that already exists—this will result in an error.
     """
     # Step 1: Lookup the movie
     if isinstance(request.lookup_id, int): # It's a TMDB ID
@@ -107,10 +113,26 @@ async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radar
     }
     return await api_call(instance, "movie", method="POST", json_data=add_payload)
 
-@router.post("/command", summary="Execute a command on Radarr")
+@router.post("/{movie_id}/search", summary="Trigger manual search for an existing movie in Radarr")
+async def search_movie(movie_id: int, instance: dict = Depends(get_radarr_instance)):
+    """
+    Triggers a manual search for the specified movie in Radarr.
+
+    AI GUIDANCE:
+    - Before using this endpoint, confirm the media exists in the library using the /library endpoint.
+    - Use this endpoint ONLY if the movie already exists in Radarr but is missing a file or needs a new download.
+    - To add a new movie, use the /add endpoint instead.
+    - Never attempt a manual search for media that is not already present—this will result in an error.
+    """
+    command_payload = {"name": "MoviesSearch", "movieIds": [movie_id]}
+    await api_call(instance, "command", method="POST", json_data=command_payload)
+    return {"message": f"Search triggered for movie ID {movie_id}."}
+
+@router.post("/command", summary="Execute a command on Radarr", deprecated=True)
 async def execute_radarr_command(request: CommandRequest, instance: dict = Depends(get_radarr_instance)):
     """
     Executes various commands on Radarr, such as searching for movies.
+    Note: It is now preferred to use specific endpoints like `/{movie_id}/search`.
     """
     command = request.command.lower()
     
@@ -134,11 +156,7 @@ async def execute_radarr_command(request: CommandRequest, instance: dict = Depen
         if not request.movie_id:
             raise HTTPException(status_code=400, detail="movie_id is required for 'fix_media' command.")
         
-        # Step 1: Delete the movie (with file deletion and blocklisting)
         await api_call(instance, f"movie/{request.movie_id}", method="DELETE", params={"deleteFiles": "true", "addImportExclusion": "true"})
-        
-        # Step 2: Re-add the movie (this part would need more logic to get the original details)
-        # For now, this is a placeholder for a more complex workflow.
         return {"message": f"Fix command initiated for movie ID {request.movie_id}. Movie deleted and blocklisted."}
 
     else:
