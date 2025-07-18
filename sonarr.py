@@ -174,19 +174,20 @@ async def search_episode(
     return {"message": f"Search triggered for episode ID {episode_id} in series {series_id}."}
 
 
-@router.post("/series/{series_id}/fix", summary="Fix entire series: delete and re-add series to force all episodes to be redownloaded")
+@router.post("/series/{series_id}/fix", summary="Fix entire series: delete, blocklist, and re-add series")
 async def fix_series(
     series_id: int,
+    addImportExclusion: bool = True,
     instance: dict = Depends(get_sonarr_instance),
 ):
     """
-    Fixes an entire series: deletes the series (and all files), then re-adds it and triggers download of all episodes.
+    Fixes an entire series: deletes the series (and all files), blocklists them, then re-adds it and triggers a new download for all episodes.
 
     AI GUIDANCE:
     - Use ONLY if multiple episodes in the show are corrupted, missing, or cannot be fixed by per-episode/season fix.
-    - This deletes the entire show and all its files, then re-adds and triggers a download for everything.
+    - When fixing a corrupted or unwanted media file, always set `addImportExclusion` to `true` in the delete call.
+    - This ensures Sonarr will not attempt to re-import the same file and will fetch a new release.
     - THIS WILL REMOVE ALL EXISTING FILES AND METADATA FOR THE SERIES!
-    - For smaller problems, use the episode or season fix endpoints instead.
     """
     # Lookup and collect all info
     series = await api_call(instance, f"series/{series_id}")
@@ -204,7 +205,7 @@ async def fix_series(
     # Delete series (and files)
     await api_call(instance, f"series/{series_id}", method="DELETE", params={
         "deleteFiles": "true",
-        "addImportExclusion": "false"
+        "addImportExclusion": str(addImportExclusion).lower()
     })
 
     # Re-add
@@ -219,23 +220,23 @@ async def fix_series(
         "addOptions": {"searchForMissingEpisodes": True}
     }
     added_series = await api_call(instance, "series", method="POST", json_data=add_payload)
-    return {"message": f"Series '{title}' was deleted and is being re-downloaded.", "series": added_series}
+    return {"message": f"Series '{title}' was deleted, blocklisted, and is being re-downloaded.", "series": added_series}
 
 
-@router.post("/series/{series_id}/season/{season_number}/fix", summary="Fix an entire season: delete and redownload all episodes in a season")
+@router.post("/series/{series_id}/season/{season_number}/fix", summary="Fix an entire season: delete, blocklist, and redownload all episodes")
 async def fix_season(
     series_id: int,
     season_number: int,
+    addImportExclusion: bool = True,
     instance: dict = Depends(get_sonarr_instance),
 ):
     """
-    Fixes a season: deletes all episode files in a season, then triggers a season-level search/download.
+    Fixes a season: deletes all episode files in a season, blocklists them, then triggers a season-level search/download.
 
     AI GUIDANCE:
     - Use this if an entire season is corrupted/missing, but the rest of the show is fine.
+    - When fixing a corrupted or unwanted media file, always set `addImportExclusion` to `true` in the delete call.
     - This will DELETE ALL FILES for the specified season ONLY, then trigger a re-download for that season.
-    - Do NOT use if only one episode is affected—use the episode fix endpoint.
-    - For problems across the whole show, use the series fix endpoint.
     """
     # Lookup episodes in season
     series = await api_call(instance, f"series/{series_id}")
@@ -249,7 +250,12 @@ async def fix_season(
     # Delete all episode files in season
     for ep in season_episodes:
         if ep.get("hasFile"):
-            await api_call(instance, f"episode/{ep['id']}", method="DELETE", params={"deleteFiles": "true"})
+            await api_call(
+                instance,
+                f"episodefile/{ep['episodeFileId']}",
+                method="DELETE",
+                params={"addImportExclusion": str(addImportExclusion).lower()}
+            )
 
     # Trigger season-level search (downloads missing/corrupt files)
     command_payload = {"name": "SeasonSearch", "seriesId": series_id, "seasonNumber": season_number}
@@ -257,27 +263,32 @@ async def fix_season(
     return {"message": f"Season {season_number} of series '{series['title']}' is being re-downloaded."}
 
 
-@router.post("/series/{series_id}/episode/{episode_id}/fix", summary="Fix a single episode: delete and redownload")
+@router.post("/series/{series_id}/episode/{episode_id}/fix", summary="Fix a single episode: delete, blocklist, and redownload")
 async def fix_episode(
     series_id: int,
     episode_id: int,
+    addImportExclusion: bool = True,
     instance: dict = Depends(get_sonarr_instance),
 ):
     """
-    Fixes an episode: deletes the file for a specific episode, then triggers an episode-level search/download.
+    Fixes an episode: deletes the file for a specific episode, blocklists it, then triggers an episode-level search/download.
 
     AI GUIDANCE:
     - Use this for a single corrupted/missing episode in a show.
-    - This will DELETE the file for the specified episode ONLY, then trigger a re-download.
-    - Use the season fix for entire seasons, or series fix for the whole show.
-    - NEVER use for episodes that are fine, as it will force a new download.
+    - When fixing a corrupted or unwanted media file, always set `addImportExclusion` to `true` in the delete call.
+    - This ensures Sonarr will not attempt to re-import the same file and will fetch a new release.
     """
     # Delete episode file if present
     episode = await api_call(instance, f"episode/{episode_id}")
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found in Sonarr")
     if episode.get("hasFile"):
-        await api_call(instance, f"episode/{episode_id}", method="DELETE", params={"deleteFiles": "true"})
+        await api_call(
+            instance,
+            f"episodefile/{episode['episodeFileId']}",
+            method="DELETE",
+            params={"addImportExclusion": str(addImportExclusion).lower()}
+        )
 
     # Trigger episode-level search
     command_payload = {"name": "EpisodeSearch", "episodeIds": [episode_id]}

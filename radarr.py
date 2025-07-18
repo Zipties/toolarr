@@ -127,17 +127,19 @@ async def search_movie(movie_id: int, instance: dict = Depends(get_radarr_instan
     command_payload = {"name": "MoviesSearch", "movieIds": [movie_id]}
     await api_call(instance, "command", method="POST", json_data=command_payload)
     return {"message": f"Search triggered for movie ID {movie_id}."}
-@router.post("/movie/{movie_id}/fix", summary="Delete and re-add a movie to force a fresh download")
+@router.post("/movie/{movie_id}/fix", summary="Delete, blocklist, and re-add a movie to force a fresh download")
 async def fix_movie(
     movie_id: int,
+    addImportExclusion: bool = True,
     instance: dict = Depends(get_radarr_instance),
 ):
     """
-    Fix a corrupted or missing movie by deleting it (including files), then re-adding by TMDB ID and triggering a new download.
+    Fix a corrupted or missing movie by deleting it, blocklisting the old release, re-adding it, and triggering a new download.
 
     AI GUIDANCE:
     - Use this only if the movie already exists and has a corrupted/missing file.
-    - This will delete the movie and its files, then re-add and trigger a download.
+    - When fixing a corrupted or unwanted media file, always set `addImportExclusion` to `true` in the delete call.
+    - This ensures Radarr will not attempt to re-import the same file and will fetch a new release.
     - Do not use if you want to just search for a missing file—use /{movie_id}/search for that.
     """
     # 1. Lookup the movie
@@ -151,10 +153,10 @@ async def fix_movie(
     if not all([tmdb_id, quality_profile_id, root_folder_path]):
         raise HTTPException(status_code=400, detail="Missing necessary data to re-add movie")
 
-    # 2. Delete the movie (including files)
+    # 2. Delete the movie (including files and blocklisting)
     await api_call(instance, f"movie/{movie_id}", method="DELETE", params={
         "deleteFiles": "true",
-        "addImportExclusion": "false"
+        "addImportExclusion": str(addImportExclusion).lower()
     })
 
     # 3. Re-add the movie
@@ -167,7 +169,7 @@ async def fix_movie(
         "addOptions": {"searchForMovie": True}
     }
     added_movie = await api_call(instance, "movie", method="POST", json_data=add_payload)
-    return {"message": f"Movie '{title}' was deleted and is being re-downloaded.", "movie": added_movie}
+    return {"message": f"Movie '{title}' was deleted, blocklisted, and is being re-downloaded.", "movie": added_movie}
 
 @router.post("/command", summary="Execute a command on Radarr", deprecated=True)
 async def execute_radarr_command(request: CommandRequest, instance: dict = Depends(get_radarr_instance)):
