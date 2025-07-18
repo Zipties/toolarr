@@ -66,11 +66,3 @@ async def get_pruned_openapi():
     with open("openapi-chatgpt.json", "r") as f:
         return json.load(f)
 
-
-if __name__ == "__main__":
-    import json
-    # This allows generating the openapi.json spec directly
-    with open("openapi.json", "w") as f:
-        json.dump(app.openapi(), f, indent=2)
-    print("openapi.json generated")
-
