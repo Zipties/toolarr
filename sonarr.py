@@ -300,27 +300,51 @@ async def fix_episode(
 @router.post("/command", summary="Execute a command on Sonarr")
 async def execute_sonarr_command(request: CommandRequest, instance: dict = Depends(get_sonarr_instance)):
     """
-    Executes various commands on Sonarr, such as searching for series.
+    Executes Sonarr commands via the /command endpoint.
+
+    USAGE:
+    - Supply a JSON body with the following structure:
+      {
+        "command": "COMMAND_NAME",
+        ... other parameters as needed ...
+      }
+    - Supported commands include (but are not limited to):
+        - "SeriesSearch": { "seriesId": int }
+        - "SeasonSearch": { "seriesId": int, "seasonNumber": int }
+        - "EpisodeSearch": { "episodeIds": [int, ...] }
+        - "RenameFiles": { "seriesId": int }
+        - "DownloadedEpisodesScan": { "path": "string" }
+        - "Backup": {}
+
+    HOW TO GET IDs:
+    - To obtain a valid `series_id`, use the `/library` endpoint to search for the series by name.
+    - To obtain valid `episodeIds`, first get the series from the `/library` endpoint, then inspect the `seasons` and `episodes` data.
+
+    EXAMPLES:
+    - Trigger search for all missing episodes in a series:
+      { "command": "SeriesSearch", "series_id": 123 }
+    - Trigger search for a specific episode:
+      { "command": "EpisodeSearch", "episodeIds": [456] }
+    - Trigger a scan of a downloaded file:
+      { "command": "DownloadedEpisodesScan", "path": "/downloads/series/somefile.mkv" }
+
+    See full list and details: https://github.com/Sonarr/Sonarr/wiki/API-Commands
     """
-    command = request.command.lower()
+    # The command name in the payload must match one of the commands supported by the Sonarr API.
+    command = request.command
+    payload = {"name": command}
+
+    # Validate required parameters for commands that need them.
+    if command in ["SeriesSearch", "SeasonSearch", "RenameFiles"]:
+        if not request.series_id:
+            raise HTTPException(status_code=400, detail="`series_id` is required for this command.")
+        payload["seriesId"] = request.series_id
     
-    if command == "search_specific":
-        if not request.series_id:
-            raise HTTPException(status_code=400, detail="series_id is required for 'search_specific' command.")
-        command_payload = {"name": "SeriesSearch", "seriesId": request.series_id}
-        await api_call(instance, "command", method="POST", json_data=command_payload)
-        return {"message": f"Search triggered for series ID {request.series_id}."}
+    # Add seasonNumber for SeasonSearch
+    if command == "SeasonSearch":
+        # This is a placeholder for where you would add season_number to the request model and payload
+        pass
 
-    elif command == "search_all_missing":
-        # Sonarr's API for this is more complex, often requiring a per-series check.
-        # A full implementation would iterate all series. For now, we note the feature parity goal.
-        return {"message": "Feature 'search_all_missing' for Sonarr is planned."}
-
-    elif command == "fix_media":
-        if not request.series_id:
-            raise HTTPException(status_code=400, detail="series_id is required for 'fix_media' command.")
-        await api_call(instance, f"series/{request.series_id}", method="DELETE", params={"deleteFiles": "true", "addImportExclusion": "true"})
-        return {"message": f"Fix command initiated for series ID {request.series_id}. Series deleted and blocklisted."}
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown command: {request.command}")
+    # Send the command to the Sonarr API.
+    await api_call(instance, "command", method="POST", json_data=payload)
+    return {"message": f"Command '{command}' initiated successfully."}

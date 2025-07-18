@@ -174,33 +174,46 @@ async def fix_movie(
 @router.post("/command", summary="Execute a command on Radarr", deprecated=True)
 async def execute_radarr_command(request: CommandRequest, instance: dict = Depends(get_radarr_instance)):
     """
-    Executes various commands on Radarr, such as searching for movies.
-    Note: It is now preferred to use specific endpoints like `/{movie_id}/search`.
+    Executes Radarr commands via the /command endpoint.
+    Note: It is now preferred to use specific, dedicated endpoints like `/{movie_id}/search` or `/movie/{movie_id}/fix`.
+
+    USAGE:
+    - Supply a JSON body with the following structure:
+      {
+        "command": "COMMAND_NAME",
+        ... other parameters as needed ...
+      }
+    - Supported commands include:
+        - "MoviesSearch": { "movieIds": [int, ...] }
+        - "RenameFiles": { "movieIds": [int, ...] }
+        - "RescanMovie": { "movieId": int }
+        - "Backup": {}
+
+    HOW TO GET IDs:
+    - To obtain a valid `movieId`, use the `/library` endpoint to search for the movie by name.
+
+    EXAMPLES:
+    - Trigger a search for specific movies:
+      { "command": "MoviesSearch", "movieIds": [123, 456] }
+    - Trigger a file rename for a movie:
+      { "command": "RenameFiles", "movieIds": [123] }
+
+    See full list and details: https://github.com/Radarr/Radarr/wiki/API-Commands
     """
-    command = request.command.lower()
+    # The command name in the payload must match one of the commands supported by the Radarr API.
+    command = request.command
+    payload = {"name": command}
+
+    # Validate required parameters for commands that need them.
+    if command in ["MoviesSearch", "RenameFiles"]:
+        if not request.movie_id:
+            raise HTTPException(status_code=400, detail="`movie_id` is required for this command.")
+        payload["movieIds"] = [request.movie_id]
+    elif command == "RescanMovie":
+        if not request.movie_id:
+            raise HTTPException(status_code=400, detail="`movie_id` is required for this command.")
+        payload["movieId"] = request.movie_id
     
-    if command == "search_specific":
-        if not request.movie_id:
-            raise HTTPException(status_code=400, detail="movie_id is required for 'search_specific' command.")
-        command_payload = {"name": "MoviesSearch", "movieIds": [request.movie_id]}
-        await api_call(instance, "command", method="POST", json_data=command_payload)
-        return {"message": f"Search triggered for movie ID {request.movie_id}."}
-
-    elif command == "search_all_missing":
-        all_movies = await api_call(instance, "movie")
-        missing_movie_ids = [m['id'] for m in all_movies if not m.get('hasFile', False) and m.get('monitored', False)]
-        if not missing_movie_ids:
-            return {"message": "No missing monitored movies found to search for."}
-        command_payload = {"name": "MoviesSearch", "movieIds": missing_movie_ids}
-        await api_call(instance, "command", method="POST", json_data=command_payload)
-        return {"message": f"Search triggered for {len(missing_movie_ids)} missing movies."}
-        
-    elif command == "fix_media":
-        if not request.movie_id:
-            raise HTTPException(status_code=400, detail="movie_id is required for 'fix_media' command.")
-        
-        await api_call(instance, f"movie/{request.movie_id}", method="DELETE", params={"deleteFiles": "true", "addImportExclusion": "true"})
-        return {"message": f"Fix command initiated for movie ID {request.movie_id}. Movie deleted and blocklisted."}
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown command: {request.command}")
+    # Send the command to the Radarr API.
+    await api_call(instance, "command", method="POST", json_data=payload)
+    return {"message": f"Command '{command}' initiated successfully."}
