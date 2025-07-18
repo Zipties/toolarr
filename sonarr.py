@@ -282,12 +282,14 @@ async def fix_episode(
     episode = await api_call(instance, f"episode/{episode_id}")
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found in Sonarr")
+    
+    # AI GUIDANCE: Always use addImportExclusion=true when deleting episode files during a fix to prevent bad files from being redownloaded.
     if episode.get("hasFile"):
         await api_call(
             instance,
-            f"episodefile/{episode['episodeFileId']}",
+            f"episode/{episode['id']}",
             method="DELETE",
-            params={"addImportExclusion": str(addImportExclusion).lower()}
+            params={"deleteFiles": "true", "addImportExclusion": str(addImportExclusion).lower()}
         )
 
     # Trigger episode-level search
