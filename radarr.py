@@ -127,7 +127,7 @@ async def search_movie(movie_id: int, instance: dict = Depends(get_radarr_instan
     command_payload = {"name": "MoviesSearch", "movieIds": [movie_id]}
     await api_call(instance, "command", method="POST", json_data=command_payload)
     return {"message": f"Search triggered for movie ID {movie_id}."}
-@router.post("/movie/{movie_id}/fix", summary="Delete, blocklist, and re-add a movie to force a fresh download")
+@router.post("/movie/{movie_id}/fix", summary="Delete, blocklist, and re-add a movie to force a fresh download", operation_id="fix_radarr_movie")
 async def fix_movie(
     movie_id: int,
     addImportExclusion: bool = True,

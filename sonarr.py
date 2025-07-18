@@ -154,7 +154,7 @@ async def search_series(series_id: int, instance: dict = Depends(get_sonarr_inst
     await api_call(instance, "command", method="POST", json_data=command_payload)
     return {"message": f"Search triggered for missing episodes in series ID {series_id}."}
 
-@router.post("/series/{series_id}/episode/{episode_id}/search", summary="Trigger manual search for a specific episode")
+@router.post("/series/{series_id}/episode/{episode_id}/search", summary="Trigger manual search for a specific episode", operation_id="search_sonarr_episode")
 async def search_episode(
     series_id: int,
     episode_id: int,
@@ -174,7 +174,7 @@ async def search_episode(
     return {"message": f"Search triggered for episode ID {episode_id} in series {series_id}."}
 
 
-@router.post("/series/{series_id}/fix", summary="Fix entire series: delete, blocklist, and re-add series")
+@router.post("/series/{series_id}/fix", summary="Fix entire series: delete, blocklist, and re-add series", operation_id="fix_sonarr_series")
 async def fix_series(
     series_id: int,
     addImportExclusion: bool = True,
@@ -223,7 +223,7 @@ async def fix_series(
     return {"message": f"Series '{title}' was deleted, blocklisted, and is being re-downloaded.", "series": added_series}
 
 
-@router.post("/series/{series_id}/season/{season_number}/fix", summary="Fix an entire season: delete, blocklist, and redownload all episodes")
+@router.post("/series/{series_id}/season/{season_number}/fix", summary="Fix an entire season: delete, blocklist, and redownload all episodes", operation_id="fix_sonarr_season")
 async def fix_season(
     series_id: int,
     season_number: int,
@@ -247,14 +247,15 @@ async def fix_season(
     if not season_episodes:
         raise HTTPException(status_code=404, detail=f"No episodes found for season {season_number}.")
 
+    # AI GUIDANCE: Always use addImportExclusion=true when deleting episode files during a fix to prevent bad files from being redownloaded.
     # Delete all episode files in season
     for ep in season_episodes:
         if ep.get("hasFile"):
             await api_call(
                 instance,
-                f"episodefile/{ep['episodeFileId']}",
+                f"episode/{ep['id']}",
                 method="DELETE",
-                params={"addImportExclusion": str(addImportExclusion).lower()}
+                params={"deleteFiles": "true", "addImportExclusion": str(addImportExclusion).lower()}
             )
 
     # Trigger season-level search (downloads missing/corrupt files)
@@ -263,7 +264,7 @@ async def fix_season(
     return {"message": f"Season {season_number} of series '{series['title']}' is being re-downloaded."}
 
 
-@router.post("/series/{series_id}/episode/{episode_id}/fix", summary="Fix a single episode: delete, blocklist, and redownload")
+@router.post("/series/{series_id}/episode/{episode_id}/fix", summary="Fix a single episode: delete, blocklist, and redownload", operation_id="fix_sonarr_episode")
 async def fix_episode(
     series_id: int,
     episode_id: int,
