@@ -140,6 +140,84 @@ async def update_monitoring_status(request: MonitorRequest, series_id: int, inst
             season["monitored"] = request.monitored
             
     return await api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
+@router.post("/{series_id}/search", summary="Trigger manual search for all missing episodes in a series")
+async def search_series(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """
+    Triggers a manual search for missing episodes in the specified series.
+
+    AI GUIDANCE:
+    - Use only if the series already exists in Sonarr and is missing episodes/files.
+    - To add a new series, use the /add endpoint instead.
+    - Never attempt a manual search for series not in the library.
+    """
+    command_payload = {"name": "SeriesSearch", "seriesId": series_id}
+    await api_call(instance, "command", method="POST", json_data=command_payload)
+    return {"message": f"Search triggered for missing episodes in series ID {series_id}."}
+
+@router.post("/series/{series_id}/episode/{episode_id}/search", summary="Trigger manual search for a specific episode")
+async def search_episode(
+    series_id: int,
+    episode_id: int,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """
+    Triggers a manual search for a single episode in Sonarr by episode ID.
+
+    AI GUIDANCE:
+    - Use this endpoint if you want to download a specific missing or corrupted episode, e.g., "download S5E3 of King of Queens".
+    - You must provide the series_id and episode_id (not season/episode numbers).
+    - To search for all missing episodes, use the /{series_id}/search endpoint instead.
+    - Never attempt a manual episode search for a series or episode not present in the library.
+    """
+    command_payload = {"name": "EpisodeSearch", "episodeIds": [episode_id]}
+    await api_call(instance, "command", method="POST", json_data=command_payload)
+    return {"message": f"Search triggered for episode ID {episode_id} in series {series_id}."}
+
+@router.post("/series/{series_id}/fix", summary="Delete and re-add a series to force a fresh download of all episodes")
+async def fix_series(
+    series_id: int,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """
+    Fix a corrupted or incomplete series by deleting it (and files), then re-adding it by TVDB ID and triggering a fresh download.
+
+    AI GUIDANCE:
+    - Use this if the series already exists but episodes are corrupted/missing and cannot be re-downloaded normally.
+    - This deletes the series and all files, then re-adds and triggers a download.
+    - Do not use if you only want to search for missing episodes—use /{series_id}/search for that.
+    """
+    # 1. Lookup the series
+    series = await api_call(instance, f"series/{series_id}")
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found in Sonarr")
+    tvdb_id = series.get("tvdbId")
+    title = series.get("title")
+    quality_profile_id = series.get("qualityProfileId")
+    language_profile_id = series.get("languageProfileId")
+    root_folder_path = series.get("rootFolderPath")
+    seasons = series.get("seasons", [])
+    if not all([tvdb_id, quality_profile_id, language_profile_id, root_folder_path]):
+        raise HTTPException(status_code=400, detail="Missing necessary data to re-add series")
+
+    # 2. Delete the series (and all files)
+    await api_call(instance, f"series/{series_id}", method="DELETE", params={
+        "deleteFiles": "true",
+        "addImportExclusion": "false"
+    })
+
+    # 3. Re-add the series
+    add_payload = {
+        "tvdbId": tvdb_id,
+        "title": title,
+        "qualityProfileId": quality_profile_id,
+        "languageProfileId": language_profile_id,
+        "rootFolderPath": root_folder_path,
+        "monitored": True,
+        "seasons": seasons,
+        "addOptions": {"searchForMissingEpisodes": True}
+    }
+    added_series = await api_call(instance, "series", method="POST", json_data=add_payload)
+    return {"message": f"Series '{title}' was deleted and is being re-downloaded.", "series": added_series}
 
 @router.post("/command", summary="Execute a command on Sonarr")
 async def execute_sonarr_command(request: CommandRequest, instance: dict = Depends(get_sonarr_instance)):
