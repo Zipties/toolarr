@@ -55,15 +55,15 @@ class BaseMediaRouter(APIRouter):
         super().__init__(*args, **kwargs)
         self.service_name = kwargs.get("tags")[0] # e.g., "sonarr" or "radarr"
         
-        # Add common routes
-        self.add_api_route("/queue", self.get_download_queue, methods=["GET"], summary=f"Get {self.service_name.capitalize()} download queue")
-        self.add_api_route("/history", self.get_download_history, methods=["GET"], summary=f"Get {self.service_name.capitalize()} download history")
-        self.add_api_route("/queue/{queue_id}", self.delete_from_queue, methods=["DELETE"], status_code=204, summary=f"Delete item from {self.service_name.capitalize()} queue")
-        self.add_api_route("/qualityprofiles", self.get_quality_profiles, methods=["GET"], summary=f"Get quality profiles from {self.service_name.capitalize()}")
-        self.add_api_route("/rootfolders", self.get_root_folders, methods=["GET"], summary=f"Get root folders from {self.service_name.capitalize()}")
-        self.add_api_route("/tags", self.get_tags, methods=["GET"], summary=f"Get all tags from {self.service_name.capitalize()}")
-        self.add_api_route("/tags", self.create_tag, methods=["POST"], summary=f"Create a new tag in {self.service_name.capitalize()}")
-        self.add_api_route("/tags/{tag_id}", self.delete_tag, methods=["DELETE"], status_code=204, summary=f"Delete a tag from {self.service_name.capitalize()}")
+        # Add common routes with unique operation_ids
+        self.add_api_route("/queue", self.get_download_queue, methods=["GET"], summary=f"Get {self.service_name.capitalize()} download queue", operation_id=f"{self.service_name}_get_queue")
+        self.add_api_route("/history", self.get_download_history, methods=["GET"], summary=f"Get {self.service_name.capitalize()} download history", operation_id=f"{self.service_name}_get_history")
+        self.add_api_route("/queue/{queue_id}", self.delete_from_queue, methods=["DELETE"], status_code=204, summary=f"Delete item from {self.service_name.capitalize()} queue", operation_id=f"{self.service_name}_delete_queue_item")
+        self.add_api_route("/qualityprofiles", self.get_quality_profiles, methods=["GET"], summary=f"Get quality profiles from {self.service_name.capitalize()}", operation_id=f"{self.service_name}_get_quality_profiles")
+        self.add_api_route("/rootfolders", self.get_root_folders, methods=["GET"], summary=f"Get root folders from {self.service_name.capitalize()}", operation_id=f"{self.service_name}_get_root_folders")
+        self.add_api_route("/tags", self.get_tags, methods=["GET"], summary=f"Get all tags from {self.service_name.capitalize()}", operation_id=f"{self.service_name}_get_tags")
+        self.add_api_route("/tags", self.create_tag, methods=["POST"], summary=f"Create a new tag in {self.service_name.capitalize()}", operation_id=f"{self.service_name}_create_tag")
+        self.add_api_route("/tags/{tag_id}", self.delete_tag, methods=["DELETE"], status_code=204, summary=f"Delete a tag from {self.service_name.capitalize()}", operation_id=f"{self.service_name}_delete_tag")
 
     async def get_download_queue(self, instance: dict):
         """Gets the list of items currently being downloaded or waiting to be downloaded."""
