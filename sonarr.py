@@ -174,6 +174,43 @@ async def search_episode(
     return {"message": f"Search triggered for episode ID {episode_id} in series {series_id}."}
 
 
+@router.get("/series/{series_id}/season/{season_number}/episode/{episode_number}/resolve", summary="Resolve a Sonarr episode ID from season/episode number", operation_id="resolve_sonarr_episode_id")
+async def resolve_episode_id(
+    series_id: int,
+    season_number: int,
+    episode_number: int,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """
+    AI GUIDANCE:
+    Use this endpoint to look up the Sonarr episode_id given a series, season, and episode number.
+
+    Use this endpoint BEFORE any operation that requires an episode_id (such as triggering episode-level downloads or fixes).
+
+    If you need to download or fix a specific episode and only have (series, season, episode), call this first, then use the resolved episode_id in the other endpoints.
+
+    Only use this endpoint if the series exists in the library.
+
+    Never guess the episode_id—always resolve it programmatically to avoid errors.
+
+    The output contains the episode_id (integer Sonarr DB id) and all Sonarr episode metadata.
+
+    If multiple matches exist (rare), return the first or best match.
+    """
+    # Fetch all episodes for the given series
+    all_episodes = await api_call(instance, "episode", params={"seriesId": series_id})
+    
+    # Find the matching episode
+    for episode in all_episodes:
+        if episode.get("seasonNumber") == season_number and episode.get("episodeNumber") == episode_number:
+            return episode
+            
+    # If no match is found, raise a 404 error
+    raise HTTPException(status_code=404, detail=f"Episode not found for Series ID {series_id}, Season {season_number}, Episode {episode_number}")
+
+
+
+
 @router.post("/series/{series_id}/fix", summary="Fix entire series: delete, blocklist, and re-add series", operation_id="fix_sonarr_series")
 async def fix_series(
     series_id: int,
