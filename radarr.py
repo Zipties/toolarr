@@ -215,7 +215,7 @@ async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radar
     added_movie = await radarr_api_call(instance, "movie", method="POST", json_data=add_payload)
     return added_movie
 
-@router.post("/radarr/add_by_title", response_model=Movie, summary="Add a new movie to Radarr by title", operation_id="add_movie_by_title_radarr")
+@router.post("/radarr/add_by_title", response_model=Movie, summary="Add a new movie to Radarr by title", operation_id="add_movie_by_title_radarr", tags=["internal-admin"])
 async def add_movie_by_title_radarr(title: str, instance: dict = Depends(get_radarr_instance)):
     """
     Adds a new movie to Radarr by looking it up by title.

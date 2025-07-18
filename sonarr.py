@@ -481,7 +481,7 @@ async def monitor_series(series_id: int, request: MonitorRequest, instance: dict
     updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
     return updated_series
 
-@router.put("/series/{series_id}/seasons/{season_number}/monitor", status_code=200, summary="Update monitoring status for a single season", operation_id="monitor_sonarr_season")
+@router.put("/series/{series_id}/seasons/{season_number}/monitor", status_code=200, summary="Update monitoring status for a single season", operation_id="monitor_sonarr_season", tags=["internal-admin"])
 async def monitor_season(series_id: int, season_number: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
     """
     Updates the monitoring status for a single season of a series.
