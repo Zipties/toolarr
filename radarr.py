@@ -94,8 +94,12 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
 @router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library")
-async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a movie in the library. Prefer 'find_movies_with_tags' for user-facing output."""
+async def find_movie_in_library(term: Optional[str] = None, instance: dict = Depends(get_radarr_instance)):
+    """
+    Searches for movies in the library. If a search term is provided, it filters by title.
+    If no term is provided, it returns all movies.
+    Prefer 'find_movies_with_tags' for user-facing output.
+    """
     all_movies = await radarr_api_call(instance, "movie")
     
     # Get quality profiles to map IDs to names
@@ -105,7 +109,7 @@ async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_i
     # Filter movies and add quality profile name
     filtered_movies = []
     for m in all_movies:
-        if term.lower() in m.get("title", "").lower():
+        if not term or term.lower() in m.get("title", "").lower():
             # Add quality profile name to the movie object
             if "qualityProfileId" in m:
                 m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
