@@ -1,5 +1,5 @@
 from urllib.parse import quote
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import httpx
@@ -93,29 +93,37 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library")
-async def find_movie_in_library(term: Optional[str] = None, instance: dict = Depends(get_radarr_instance)):
+@router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library", operation_id="find_radarr_movies")
+async def find_movie_in_library(
+    term: Optional[str] = Query(default=None, description="The search term to filter by."),
+    page: int = Query(default=1, description="The page number to retrieve."),
+    page_size: int = Query(default=25, description="The number of items per page."),
+    instance: dict = Depends(get_radarr_instance)
+):
     """
-    Searches for movies in the library. If a search term is provided, it filters by title.
-    If no term is provided, it returns all movies.
-    Prefer 'find_movies_with_tags' for user-facing output.
+    Searches for movies in the library. Supports pagination.
+    If a search term is provided, it filters by title.
+    If no term is provided, it returns a paginated list of all movies.
     """
-    all_movies = await radarr_api_call(instance, "movie")
+    params = {
+        "page": page,
+        "pageSize": page_size,
+    }
+    if term:
+        params["term"] = term
+        
+    all_movies = await radarr_api_call(instance, "movie", params=params)
     
     # Get quality profiles to map IDs to names
     quality_profiles = await radarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
     
-    # Filter movies and add quality profile name
-    filtered_movies = []
+    # Add quality profile name to each movie
     for m in all_movies:
-        if not term or term.lower() in m.get("title", "").lower():
-            # Add quality profile name to the movie object
-            if "qualityProfileId" in m:
-                m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-            filtered_movies.append(m)
-    
-    return filtered_movies
+        if "qualityProfileId" in m:
+            m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
+            
+    return all_movies
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):

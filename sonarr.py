@@ -99,11 +99,26 @@ async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_insta
     """Retrieves all episodes for a given series."""
     return await sonarr_api_call(instance, "episode", params={"seriesId": series_id})
 
-@router.get("/library", response_model=List[Series], summary="Check if a series exists in the Sonarr library")
-async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a series in the library. Prefer 'find_series_with_tags' for user-facing output."""
+@router.get("/library", response_model=List[Series], summary="Check if a series exists in the Sonarr library", operation_id="find_sonarr_series")
+async def find_series_in_library(
+    term: Optional[str] = Query(default=None, description="The search term to filter by."),
+    page: int = Query(default=1, description="The page number to retrieve."),
+    page_size: int = Query(default=25, description="The number of items per page."),
+    instance: dict = Depends(get_sonarr_instance)
+):
+    """
+    Searches for series in the library. Supports pagination.
+    If a search term is provided, it filters by title.
+    If no term is provided, it returns a paginated list of all series.
+    WARNING: Sonarr API does not support server-side pagination. Fetching very large libraries may be slow or cause memory issues.
+    """
+    # Sonarr API does not support pagination, so we fetch all and paginate in-app.
     all_series = await sonarr_api_call(instance, "series")
     
+    # Safeguard against None response
+    if all_series is None:
+        all_series = []
+
     # Get quality profiles to map IDs to names
     quality_profiles = await sonarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
@@ -111,13 +126,17 @@ async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_
     # Filter series and add quality profile name
     filtered_series = []
     for s in all_series:
-        if term.lower() in s.get("title", "").lower():
-            # Add quality profile name to the series object
+        if not term or term.lower() in s.get("title", "").lower():
             if "qualityProfileId" in s:
                 s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
             filtered_series.append(s)
+            
+    # Paginate the results
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    paginated_results = filtered_series[start_index:end_index]
     
-    return filtered_series
+    return paginated_results
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
