@@ -100,29 +100,27 @@ async def find_movie_in_library(
     page_size: int = Query(default=25, description="The number of items per page."),
     instance: dict = Depends(get_radarr_instance)
 ):
-    """
-    Searches for movies in the library. Supports pagination.
-    If a search term is provided, it filters by title.
-    If no term is provided, it returns a paginated list of all movies.
-    """
+    """Search the Radarr library with optional pagination."""
+
+    if term is None or len(term.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Search term must be at least 3 characters long.")
+
     params = {
         "page": page,
         "pageSize": page_size,
+        "term": term,
     }
-    if term:
-        params["term"] = term
-        
-    all_movies = await radarr_api_call(instance, "movie", params=params)
-    
-    # Get quality profiles to map IDs to names
+
+    response = await radarr_api_call(instance, "movie", params=params)
+    all_movies = response.get("records", response)
+
     quality_profiles = await radarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
-    
-    # Add quality profile name to each movie
+
     for m in all_movies:
         if "qualityProfileId" in m:
             m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-            
+
     return all_movies
 
 @router.get("/search", summary="Search for a movie by term")
@@ -143,7 +141,7 @@ async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance))
 @router.put("/movie/{movie_id}/move", response_model=ConfirmationMessage, summary="Move movie to new folder", tags=["internal-admin"])
 async def move_movie(movie_id: int, move_request: MoveMovieRequest, instance: dict = Depends(get_radarr_instance)):
     """Moves a movie to a new root folder and triggers Radarr to move the files."""
-    movie = await radarr_api_call(instance, f"movie/{movie_id}")
+    await radarr_api_call(instance, f"movie/{movie_id}")  # ensure movie exists
     
     # Radarr's move logic is different from Sonarr's.
     # It requires a separate "movie/editor" endpoint.

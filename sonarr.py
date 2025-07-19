@@ -106,37 +106,26 @@ async def find_series_in_library(
     page_size: int = Query(default=25, description="The number of items per page."),
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """
-    Searches for series in the library. Supports pagination.
-    If a search term is provided, it filters by title.
-    If no term is provided, it returns a paginated list of all series.
-    WARNING: Sonarr API does not support server-side pagination. Fetching very large libraries may be slow or cause memory issues.
-    """
-    # Sonarr API does not support pagination, so we fetch all and paginate in-app.
-    all_series = await sonarr_api_call(instance, "series")
-    
-    # Safeguard against None response
-    if all_series is None:
-        all_series = []
+    """Search the Sonarr library with in-app pagination."""
 
-    # Get quality profiles to map IDs to names
+    if term is None or len(term.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Search term must be at least 3 characters long.")
+
+    all_series = await sonarr_api_call(instance, "series") or []
+
     quality_profiles = await sonarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
-    
-    # Filter series and add quality profile name
+
     filtered_series = []
     for s in all_series:
-        if not term or term.lower() in s.get("title", "").lower():
+        if term.lower() in s.get("title", "").lower():
             if "qualityProfileId" in s:
                 s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
             filtered_series.append(s)
-            
-    # Paginate the results
+
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
-    paginated_results = filtered_series[start_index:end_index]
-    
-    return paginated_results
+    return filtered_series[start_index:end_index]
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
