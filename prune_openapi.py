@@ -30,6 +30,10 @@ def prune_openapi_spec(input_file="openapi.json", output_file="openapi-chatgpt.j
     # First, find all schema references ($ref) that are still in use
     used_schemas = set()
     
+    # --- Always keep these essential schemas ---
+    essential_schemas = {"HTTPValidationError", "ValidationError"}
+    used_schemas.update(essential_schemas)
+    
     def find_refs(obj):
         if isinstance(obj, dict):
             for key, value in obj.items():
