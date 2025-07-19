@@ -288,6 +288,8 @@ class UpdateSeriesRequest(BaseModel):
     seasonFolder: Optional[bool] = None
     path: Optional[str] = None
     tags: Optional[List[int]] = None
+    newRootFolderPath: Optional[str] = None
+    moveFiles: Optional[bool] = False
 
 class UpdateTagsRequest(BaseModel):
     tags: List[int] = Field(..., description="List of tag IDs to assign to the series")
@@ -425,7 +427,7 @@ async def update_series_properties(
     series_data = await sonarr_api_call(instance, f"series/{series_id}")
     update_fields = request.dict(exclude_unset=True)
     for key, value in update_fields.items():
-        if hasattr(series_data, key):
+        if key in series_data:
             series_data[key] = value
             
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
