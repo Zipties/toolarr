@@ -290,6 +290,8 @@ class UpdateMovieRequest(BaseModel):
     minimumAvailability: Optional[str] = None
     tags: Optional[List[int]] = None
     rootFolderPath: Optional[str] = None
+    newRootFolderPath: Optional[str] = None
+    moveFiles: Optional[bool] = False
 class UpdateTagsRequest(BaseModel):
     tags: List[int] = Field(..., description="List of tag IDs to assign to the movie")
 
@@ -317,7 +319,7 @@ async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dic
     movie_data = await radarr_api_call(instance, f"movie/{movie_id}")
     update_fields = request.dict(exclude_unset=True)
     for key, value in update_fields.items():
-        if hasattr(movie_data, key):
+        if key in movie_data:
             movie_data[key] = value
             
     return await radarr_api_call(instance, "movie", method="PUT", json_data=movie_data)
