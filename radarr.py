@@ -93,35 +93,41 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library", operation_id="find_radarr_movies")
+@router.get(
+    "/library",
+    response_model=List[Movie],
+    summary="Check if a movie exists in the Radarr library",
+    operation_id="find_radarr_movies",
+)
 async def find_movie_in_library(
     term: Optional[str] = Query(default=None, description="The search term to filter by."),
     page: int = Query(default=1, description="The page number to retrieve."),
     page_size: int = Query(default=25, description="The number of items per page."),
-    instance: dict = Depends(get_radarr_instance)
+    instance: dict = Depends(get_radarr_instance),
 ):
-    """Search the Radarr library with optional pagination."""
+    """Search the Radarr library with optional pagination.
 
-    if term is None or len(term.strip()) < 3:
-        raise HTTPException(status_code=400, detail="Search term must be at least 3 characters long.")
+    Radarr sometimes returns errors when filtering server-side. To avoid this we
+    fetch all movies and filter locally when a search term is provided.
+    """
 
-    params = {
-        "page": page,
-        "pageSize": page_size,
-        "term": term,
-    }
+    all_movies = await radarr_api_call(instance, "movie")
 
-    response = await radarr_api_call(instance, "movie", params=params)
-    all_movies = response.get("records", response)
-
+    # Map quality profile IDs to names
     quality_profiles = await radarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
 
+    filtered_movies = []
+    term_lower = term.lower() if term else None
     for m in all_movies:
-        if "qualityProfileId" in m:
-            m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
+        if term_lower is None or term_lower in m.get("title", "").lower():
+            if "qualityProfileId" in m:
+                m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
+            filtered_movies.append(m)
 
-    return all_movies
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    return filtered_movies[start_index:end_index]
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
@@ -446,9 +452,18 @@ async def monitor_movie(movie_id: int, request: MonitorRequest, instance: dict =
     return updated_movie
 
 
-@router.post("/movie/{movie_id}/fix", response_model=Movie, summary="Fix a movie by re-downloading it", operation_id="fix_radarr_movie")
+@router.post(
+    "/movie/{movie_id}/fix",
+    response_model=Movie,
+    summary="Replace a damaged movie file",
+    operation_id="fix_radarr_movie",
+)
 async def fix_movie(movie_id: int, instance: dict = Depends(get_radarr_instance)):
-    """Fixes a movie by deleting it, re-adding it, and triggering a new search."""
+    """Replace a corrupted or unwanted movie file.
+
+    This endpoint deletes the existing movie, re-adds it, and triggers a search
+    for a fresh copy. It should **not** be used for routine quality upgrades.
+    """
     # Get movie details to get the title
     try:
         movie = await radarr_api_call(instance, f"movie/{movie_id}")
