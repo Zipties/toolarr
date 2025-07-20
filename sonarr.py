@@ -520,6 +520,30 @@ async def fix_series_release(
     return {"message": f"Successfully deleted the file for episode {episode_id} and triggered a new search."}
 
 
+@router.post("/series/{series_id}/season/{season_number}/search", status_code=200, summary="Trigger a search for an entire season", operation_id="season_search")
+async def search_season(series_id: int, season_number: int, instance: dict = Depends(get_sonarr_instance)):
+    """Triggers a search for all episodes within a season."""
+    await sonarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "SeasonSearch", "seriesId": series_id, "seasonNumber": season_number},
+    )
+    return {"message": f"Triggered search for season {season_number} of series {series_id}."}
+
+
+@router.post("/series/{series_id}/search", status_code=200, summary="Trigger a search for an entire series", operation_id="series_search")
+async def search_series(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Triggers a search for all episodes of a series."""
+    await sonarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "SeriesSearch", "seriesId": series_id},
+    )
+    return {"message": f"Triggered search for series {series_id}."}
+
+
 @router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
 async def delete_series(
     series_id: int,
