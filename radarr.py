@@ -5,6 +5,7 @@ from typing import List, Optional
 import httpx
 import os
 from instance_endpoints import get_radarr_instance
+import datetime
 
 # Lookup endpoints only search external sources (TMDB).
 # Never use them to check if a movie is already in your Radarr library.
@@ -14,16 +15,16 @@ from instance_endpoints import get_radarr_instance
 class Movie(BaseModel):
     id: int
     title: str
-    path: str
-    tmdbId: int
+    path: Optional[str] = None  # Corrected: Made Optional
+    tmdbId: Optional[int] = None # Corrected: Made Optional
     monitored: bool
-    rootFolderPath: str
-    qualityProfileId: int
+    rootFolderPath: Optional[str] = None # Corrected: Made Optional
+    qualityProfileId: Optional[int] = None # Corrected: Made Optional
     qualityProfileName: Optional[str] = None
     year: Optional[int] = None
     hasFile: Optional[bool] = None
     tags: List[int] = []
-    statistics: dict = {}
+    statistics: Optional[dict] = {} # Corrected: Made Optional
 
 class MoveMovieRequest(BaseModel):
     rootFolderPath: str = Field(..., description="The new root folder path for the movie.")
@@ -59,18 +60,12 @@ router = APIRouter(
     tags=["radarr"],
 )
 
-# In-memory cache for instance configurations
-
-
-
-
-
 async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
     """Make an API call to a specific Radarr instance."""
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{instance['url']}/api/v3/{endpoint}"
     print(f"Calling Radarr API: {method} {url} with params: {params}")
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             if method == "GET":
@@ -83,14 +78,13 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
                 response = await client.delete(url, headers=headers, params=params)
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
-            
+
             print(f"Radarr API response: {response.status_code}")
             response.raise_for_status()
-            
-            # Handle successful empty responses
+
             if response.status_code == 204 or not response.text:
                 return None
-                
+
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
@@ -114,16 +108,10 @@ async def find_movie_in_library(
     page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_radarr_instance),
 ):
-    """Search your **local** Radarr library for existing movies.
-    This function now filters movies more efficiently to avoid timeouts and large payloads.
-    """
-    # First, get a lightweight list of all movies from Radarr.
-    all_movies = await radarr_api_call(instance, "movie")
-    if not isinstance(all_movies, list):
-        # If the response isn't a list (e.g., an error or unexpected format), treat it as empty.
-        all_movies = []
+    """Search your local Radarr library for existing movies."""
+    all_movies_data = await radarr_api_call(instance, "movie")
+    all_movies = all_movies_data if isinstance(all_movies_data, list) else []
 
-    # Filter this list based on the search term before doing anything else.
     filtered_movies = []
     if term:
         term_lower = term.lower()
@@ -131,25 +119,20 @@ async def find_movie_in_library(
             if m.get("title", "").lower().startswith(term_lower):
                 filtered_movies.append(m)
     else:
-        # If no search term, use the whole list.
         filtered_movies = all_movies
 
-    # Now, only if we have filtered results, fetch the quality profile details.
-    # This prevents fetching unnecessary data for a large library.
     if filtered_movies:
         quality_profiles = await radarr_api_call(instance, "qualityprofile")
-        quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
+        quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles} if isinstance(quality_profiles, list) else {}
         for m in filtered_movies:
             if "qualityProfileId" in m:
                 m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-    
-    # Finally, apply pagination to the filtered list.
-    page_size = min(page_size, 25)
+
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
-    
-    # Return the paginated slice of the filtered list.
     return filtered_movies[start_index:end_index]
+
+
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
