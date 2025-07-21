@@ -114,12 +114,9 @@ async def find_movie_in_library(
     page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_radarr_instance),
 ):
-    """Search your **local** Radarr library for existing movies.
-
-    Radarr sometimes returns errors when filtering server-side. To avoid this we
-    fetch all movies and filter locally when a search term is provided. Use this
-    endpoint solely for checking what is already in your collection. For adding
-    new movies, use the lookup endpoints instead.
+    """Search your Radarr library for existing movies.
+Fetching all movies and filtering locally avoids Radarr server-side errors with search.
+Use this only to check your collection—use lookup endpoints for adding new movies.
     """
 
     async def get_all_movies():
