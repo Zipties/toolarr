@@ -110,7 +110,7 @@ async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_insta
 
 @router.get(
     "/library",
-    response_model=List[Series], 
+    response_model=List[Series],
     summary="Check if a series exists in the Sonarr library",
     operation_id="find_sonarr_series"
 )
@@ -120,45 +120,40 @@ async def find_series_in_library(
     page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """Search the Sonarr library with in-app pagination."""
-
-    # Cap page_size at 25 to avoid returning overly large responses
-    page_size = min(page_size, 25)
-
-    # Sonarr's API does not support pagination, so we must fetch all series.
+    """Search the Sonarr library with in-app pagination.
+    This function now filters series more efficiently to avoid timeouts and large payloads.
+    """
+    # First, get a lightweight list of all series from Sonarr.
     series_data = await sonarr_api_call(instance, "series") or {}
-    all_series = series_data.get("records", series_data) or []
+    all_series = series_data.get("records", series_data if isinstance(series_data, list) else [])
 
-
-    # Map quality profile IDs to names
-    quality_profiles = await sonarr_api_call(instance, "qualityprofile")
-    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
-
-    # Filter the full list if a search term is provided
+    # Filter this list based on the search term before doing anything else.
     filtered_series = []
     if term:
         term_lower = term.lower()
         for s in all_series:
             if s.get("title", "").lower().startswith(term_lower):
-                if "qualityProfileId" in s:
-                    s["qualityProfileName"] = quality_profile_map.get(
-                        s["qualityProfileId"], "Unknown"
-                    )
                 filtered_series.append(s)
     else:
-        # If no term, use the whole list
-        for s in all_series:
-            if "qualityProfileId" in s:
-                s["qualityProfileName"] = quality_profile_map.get(
-                    s["qualityProfileId"], "Unknown"
-                )
+        # If no search term, use the whole list.
         filtered_series = all_series
 
-    # Apply our own pagination to the final filtered list
+    # Now, only if we have filtered results, fetch the quality profile details.
+    # This prevents fetching unnecessary data for a large library.
+    if filtered_series:
+        quality_profiles = await sonarr_api_call(instance, "qualityprofile")
+        quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
+        for s in filtered_series:
+            if "qualityProfileId" in s:
+                s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
+
+    # Finally, apply pagination to the filtered list.
+    page_size = min(page_size, 25)
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
-    return filtered_series[start_index:end_index]
 
+    # Return the paginated slice of the filtered list.
+    return filtered_series[start_index:end_index]
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
