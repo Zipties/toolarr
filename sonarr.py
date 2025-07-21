@@ -108,20 +108,24 @@ async def find_series_in_library(
 ):
     """Search the Sonarr library with in-app pagination."""
 
-    if term is None or len(term.strip()) < 3:
-        raise HTTPException(status_code=400, detail="Search term must be at least 3 characters long.")
-
     all_series = await sonarr_api_call(instance, "series") or []
 
     quality_profiles = await sonarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
 
     filtered_series = []
-    for s in all_series:
-        if term.lower() in s.get("title", "").lower():
+    if term:
+        term_lower = term.lower()
+        for s in all_series:
+            if term_lower in s.get("title", "").lower():
+                if "qualityProfileId" in s:
+                    s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
+                filtered_series.append(s)
+    else:
+        filtered_series = all_series
+        for s in filtered_series:
             if "qualityProfileId" in s:
                 s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
-            filtered_series.append(s)
 
     start_index = (page - 1) * page_size
     end_index = start_index + page_size

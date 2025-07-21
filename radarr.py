@@ -137,12 +137,18 @@ async def find_movie_in_library(
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
 
     filtered_movies = []
-    term_lower = term.lower() if term else None
-    for m in all_movies:
-        if term_lower is None or term_lower in m.get("title", "").lower():
+    if term:
+        term_lower = term.lower()
+        for m in all_movies:
+            if term_lower in m.get("title", "").lower():
+                if "qualityProfileId" in m:
+                    m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
+                filtered_movies.append(m)
+    else:
+        filtered_movies = all_movies
+        for m in filtered_movies:
             if "qualityProfileId" in m:
                 m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-            filtered_movies.append(m)
 
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
