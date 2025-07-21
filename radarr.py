@@ -120,24 +120,32 @@ Use this only to check your collection—use lookup endpoints for adding new mov
     """
 
     async def get_all_movies():
-        """Retrieve all movies from Radarr, handling pagination."""
-        movies = []
-        page = 1
-        page_size_param = 1000
-        while True:
-            resp = await radarr_api_call(
-                instance,
-                "movie",
-                params={"page": page, "pageSize": page_size_param},
-            )
-            page_movies = resp.get("records", resp) or []
-            movies.extend(page_movies)
+    """Retrieve all movies from Radarr, handling pagination."""
+    movies = []
+    page = 1
+    page_size_param = 1000
+    while True:
+        resp = await radarr_api_call(
+            instance,
+            "movie",
+            params={"page": page, "pageSize": page_size_param},
+        )
 
+        # Check if resp is a dictionary before trying to get keys from it
+        if isinstance(resp, dict):
+            page_movies = resp.get("records", []) or []
             total = resp.get("totalRecords")
-            if total is None or len(movies) >= total:
-                break
-            page += 1
-        return movies
+        else:
+            # If not a dict, it's likely the list of movies itself (or empty)
+            page_movies = resp or []
+            total = len(movies) + len(page_movies)
+
+        movies.extend(page_movies)
+
+        if total is None or len(movies) >= total:
+            break
+        page += 1
+    return movies
 
     # Cap page_size to 25 to limit response size
     page_size = min(page_size, 25)
