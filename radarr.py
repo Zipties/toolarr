@@ -6,6 +6,10 @@ import httpx
 import os
 from instance_endpoints import get_radarr_instance
 
+# Lookup endpoints only search external sources (TMDB).
+# Never use them to check if a movie is already in your Radarr library.
+# For existence checks always use the ``find`` endpoints.
+
 # Pydantic Models for Radarr
 class Movie(BaseModel):
     id: int
@@ -90,6 +94,11 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error connecting to Radarr: {str(e)}. Check your server URL, API key and network connectivity."
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
@@ -105,10 +114,12 @@ async def find_movie_in_library(
     page_size: int = Query(default=25, description="The number of items per page."),
     instance: dict = Depends(get_radarr_instance),
 ):
-    """Search the Radarr library with optional pagination.
+    """Search your **local** Radarr library for existing movies.
 
     Radarr sometimes returns errors when filtering server-side. To avoid this we
-    fetch all movies and filter locally when a search term is provided.
+    fetch all movies and filter locally when a search term is provided. Use this
+    endpoint solely for checking what is already in your collection. For adding
+    new movies, use the lookup endpoints instead.
     """
 
     async def get_all_movies():
@@ -156,7 +167,12 @@ async def find_movie_in_library(
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a movie by term and returns the TMDB ID."""
+    """Look up a movie from TMDB.
+
+    This performs an external search and is useful when adding new movies or
+    retrieving metadata. It does **not** confirm whether the movie exists in your
+    Radarr library. For that use ``find_movie_in_library``.
+    """
     try:
         return await radarr_api_call(instance, "movie/lookup", params={"term": term})
     except Exception as e:
@@ -165,7 +181,12 @@ async def search_movie(term: str, instance: dict = Depends(get_radarr_instance))
 
 @router.get("/lookup", summary="Search for a new movie to add to Radarr")
 async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a new movie by a search term. This is the first step to add a new movie."""
+    """Search TMDB for movies not already in your library.
+
+    Use this endpoint when you plan to **add** a new movie or fetch metadata.
+    Results returned here do not indicate that a movie exists locally. For
+    existence checks, call ``find_movie_in_library`` instead.
+    """
     encoded_term = quote(term)
     return await radarr_api_call(instance, f"movie/lookup?term={encoded_term}")
 

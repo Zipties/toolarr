@@ -5,6 +5,10 @@ import httpx
 import os
 from instance_endpoints import get_sonarr_instance
 
+# Lookup endpoints only query TVDB and return metadata regardless of your
+# local library contents. Never use them to verify if a show is present. Use the
+# ``find`` endpoints for library existence checks.
+
 # Pydantic Models for Sonarr
 class Series(BaseModel):
     id: int
@@ -81,6 +85,11 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Sonarr API error: {e.response.text}")
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error connecting to Sonarr: {str(e)}. Check your server URL, API key and network connectivity."
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
 
@@ -106,7 +115,11 @@ async def find_series_in_library(
     page_size: int = Query(default=25, description="The number of items per page."),
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """Search the Sonarr library with in-app pagination."""
+    """Search your **local** Sonarr library for existing series.
+
+    Use this endpoint **only** to check what is already present. Do **not** use
+    it when adding new shows; the lookup endpoints are for external searches.
+    """
 
     all_series = await sonarr_api_call(instance, "series") or []
 
@@ -133,12 +146,24 @@ async def find_series_in_library(
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a new series by term and returns the TVDB ID."""
+    """Look up a series from TVDB.
+
+    This endpoint searches the internet for shows that may not exist locally and
+    is typically used before adding a new series. It does **not** verify
+    anything about your library contents. Use ``find_series_in_library`` instead
+    if you need to know what is already present.
+    """
     return await sonarr_api_call(instance, "series/lookup", params={"term": term})
 
 @router.get("/lookup", summary="Search for a new series to add to Sonarr")
 async def lookup_series(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a new series by a search term. This is the first step to add a new series."""
+    """Search TVDB for shows not already in your library.
+
+    Use this when you intend to **add** a new series or fetch external
+    metadata. Results here do not indicate that a show exists locally. Never use
+    this endpoint for library existence checks; use ``find_series_in_library``
+    instead.
+    """
     return await sonarr_api_call(instance, "series/lookup", params={"term": term})
 
 @router.put("/series/{sonarr_id}/move", response_model=Series, summary="Move series to new folder", tags=["internal-admin"])
@@ -333,7 +358,11 @@ async def get_tag_map(instance_config: dict) -> dict:
 # Update the library search to include tag names
 @router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="series_with_tags")
 async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches library and includes tag names instead of just IDs. Use this for user-facing output."""
+    """Searches the **local** library and includes tag names instead of just IDs.
+
+    This is a convenience wrapper around ``find_series_in_library`` that adds
+    human-friendly tag names. It should not be used for adding new shows.
+    """
     all_series = await sonarr_api_call(instance, "series")
     tag_map = await get_tag_map(instance)
     
