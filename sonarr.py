@@ -115,9 +115,9 @@ async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_insta
     operation_id="find_sonarr_series"
 )
 async def find_series_in_library(
-    term: Optional[str] = Query(default=None, description="The search term to filter by."),
-    page: int = Query(default=1, description="The page number to retrieve."),
-    page_size: int = Query(default=25, description="The number of items per page (max 25)."),
+    term: Optional[str] = Query(None, description="The search term to filter by."),
+    page: int = Query(1, description="The page number to retrieve."),
+    page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_sonarr_instance)
 ):
     """Search the Sonarr library with in-app pagination."""
