@@ -584,6 +584,18 @@ async def search_season(
     return {"message": f"Triggered season search for season {season_number}."}
 
 
+@router.post("/series/{series_id}/search", status_code=200, summary="Trigger a search for an entire series", operation_id="series_search")
+async def search_series(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Triggers a search for all episodes of a series."""
+    await sonarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "SeriesSearch", "seriesId": series_id},
+    )
+    return {"message": f"Triggered search for series {series_id}."}
+
+
 @router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
 async def delete_series(
     series_id: int,
