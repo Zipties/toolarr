@@ -4,6 +4,7 @@ from typing import List, Optional
 import httpx
 import os
 from instance_endpoints import get_sonarr_instance
+import datetime
 
 # Lookup endpoints only query TVDB and return metadata regardless of your
 # local library contents. Never use them to verify if a show is present. Use the
@@ -13,17 +14,17 @@ from instance_endpoints import get_sonarr_instance
 class Series(BaseModel):
     id: int
     title: str
-    path: str
-    tvdbId: int
+    path: Optional[str] = None # Corrected: Made Optional
+    tvdbId: Optional[int] = None # Corrected: Made Optional
     monitored: bool
-    rootFolderPath: str
-    qualityProfileId: int
+    rootFolderPath: Optional[str] = None # Corrected: Made Optional
+    qualityProfileId: Optional[int] = None # Corrected: Made Optional
     qualityProfileName: Optional[str] = None
-    languageProfileId: int
+    languageProfileId: Optional[int] = None # Corrected: Made Optional
     year: Optional[int] = None
     seriesType: Optional[str] = None
     tags: List[int] = []
-    statistics: dict = {}
+    statistics: Optional[dict] = {} # Corrected: Made Optional
     seasons: List[dict] = []
 
 class MoveSeriesRequest(BaseModel):
@@ -61,19 +62,11 @@ router = APIRouter(
 )
 
 async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", params: dict = None, json_data: dict = None):
-    """Make an API call to a specific Sonarr instance with detailed logging."""
+    """Make an API call to a specific Sonarr instance."""
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{instance['url']}/api/v3/{endpoint}"
-    
-    # --- START DIAGNOSTIC LOGGING ---
-    print(f"--- TOOLARR DIAGNOSTIC ---")
-    print(f"Timestamp: {datetime.datetime.now()}")
-    print(f"Calling Sonarr Instance: {instance.get('name', 'N/A')}")
-    print(f"Request: {method} {url}")
-    print(f"Params: {params}")
-    # --- END DIAGNOSTIC LOGGING ---
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             if method == "GET":
                 response = await client.get(url, headers=headers, params=params)
@@ -86,29 +79,34 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
 
-            # --- START DIAGNOSTIC LOGGING ---
-            print(f"Response Status Code: {response.status_code}")
-            print(f"Response Headers: {response.headers}")
-            print(f"Response Body (Raw Text): {response.text}")
-            print(f"--- END TOOLARR DIAGNOSTIC ---")
-            # --- END DIAGNOSTIC LOGGING ---
-
             response.raise_for_status()
-            if not response.text:
+            if response.status_code == 204 or not response.text:
                 return None
             return response.json()
         except httpx.HTTPStatusError as e:
-            print(f"[ERROR] HTTPStatusError: {e.response.status_code} - {e.response.text}")
             raise HTTPException(status_code=e.response.status_code, detail=f"Sonarr API error: {e.response.text}")
         except httpx.RequestError as e:
-            print(f"[ERROR] RequestError: {e}")
             raise HTTPException(
                 status_code=502,
                 detail=f"Error connecting to Sonarr: {str(e)}. Check your server URL, API key and network connectivity."
             )
         except Exception as e:
-            print(f"[ERROR] Unexpected Exception: {e}")
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
+
+class Episode(BaseModel):
+    id: int
+    seriesId: int
+    episodeFileId: int
+    seasonNumber: int
+    episodeNumber: int
+    title: str
+    airDate: Optional[str] = None
+    monitored: bool
+
+@router.get("/series/{series_id}/episodes", response_model=List[Episode], summary="Get all episodes for a series", operation_id="get_sonarr_episodes")
+async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Retrieves all episodes for a given series."""
+    return await sonarr_api_call(instance, "episode", params={"seriesId": series_id})
 
 @router.get(
     "/library",
@@ -122,9 +120,7 @@ async def find_series_in_library(
     page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """Search the Sonarr library with in-app pagination.
-    This function now filters series more efficiently to avoid timeouts and large payloads.
-    """
+    """Search the Sonarr library with in-app pagination."""
     series_data = await sonarr_api_call(instance, "series")
     all_series = []
     if isinstance(series_data, list):
@@ -151,11 +147,11 @@ async def find_series_in_library(
             if "qualityProfileId" in s:
                 s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
 
-    page_size = min(page_size, 25)
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
-
     return filtered_series[start_index:end_index]
+
+
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
