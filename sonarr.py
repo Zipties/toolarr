@@ -9,17 +9,17 @@ from instance_endpoints import get_sonarr_instance
 class Series(BaseModel):
     id: int
     title: str
-    path: str
-    tvdbId: int
+    path: Optional[str] = None
+    tvdbId: Optional[int] = None
     monitored: bool
-    rootFolderPath: str
-    qualityProfileId: int
+    rootFolderPath: Optional[str] = None
+    qualityProfileId: Optional[int] = None
     qualityProfileName: Optional[str] = None
-    languageProfileId: int
+    languageProfileId: Optional[int] = None
     year: Optional[int] = None
     seriesType: Optional[str] = None
     tags: List[int] = []
-    statistics: dict = {}
+    statistics: Optional[dict] = None
     seasons: List[dict] = []
 
 class MoveSeriesRequest(BaseModel):
@@ -81,6 +81,8 @@ async def sonarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Sonarr API error: {e.response.text}")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Error connecting to Sonarr: {str(e)}.")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
 
@@ -99,9 +101,9 @@ async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_insta
     """Retrieves all episodes for a given series."""
     return await sonarr_api_call(instance, "episode", params={"seriesId": series_id})
 
-@router.get("/library", response_model=List[Series], summary="Check if a series exists in the Sonarr library")
+@router.get("/library/series", response_model=List[Series], operation_id="search_sonarr_library_for_series", summary="Search Sonarr library for series.")
 async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a series in the library. Prefer 'find_series_with_tags' for user-facing output."""
+    """Searches for a series in the library. For user output, prefer 'find_series_with_tags'."""
     all_series = await sonarr_api_call(instance, "series")
     
     # Get quality profiles to map IDs to names
@@ -118,6 +120,15 @@ async def find_series_in_library(term: str, instance: dict = Depends(get_sonarr_
             filtered_series.append(s)
     
     return filtered_series
+
+@router.get("/series/id_lookup", summary="Get the series ID for a given title.", operation_id="get_sonarr_series_id_by_title")
+async def get_series_id_by_title(title: str, instance: dict = Depends(get_sonarr_instance)):
+    """Looks up a series by title and returns its ID. Use this to get the series_id for other operations."""
+    all_series = await sonarr_api_call(instance, "series")
+    for s in all_series:
+        if title.lower() == s.get("title", "").lower():
+            return {"series_id": s["id"]}
+    raise HTTPException(status_code=404, detail=f"Series with title '{title}' not found.")
 
 @router.get("/search", summary="Search for a new series by term")
 async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
@@ -338,7 +349,7 @@ async def find_series_with_tags(term: str, instance: dict = Depends(get_sonarr_i
     return filtered_series
 
 # Tag management endpoints
-@router.get("/sonarr/tags", summary="Get all tags from Sonarr", operation_id="sonarr_get_tags", tags=["internal-admin"])
+@router.get("/sonarr/tags", summary="Get all tags from Sonarr", operation_id="sonarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
@@ -410,7 +421,7 @@ async def update_series_properties(
     request: UpdateSeriesRequest,
     instance: dict = Depends(get_sonarr_instance)
 ):
-    """Update series properties like monitoring status, quality profile, tags, etc."""
+    """Updates series properties. To remove a tag, get the series's current tags, then submit a new list of tags that excludes the one to be removed. This replaces the entire list of tags for the series."""
     # If a new root folder is provided, handle the move operation.
     if request.newRootFolderPath:
         series = await sonarr_api_call(instance, f"series/{series_id}")
@@ -432,41 +443,6 @@ async def update_series_properties(
             
     return await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
 
-@router.put("/series/{series_id}/tags", summary="Update tags for a TV show in Sonarr (NOT for movies)", operation_id="update_series_tags_sonarr", tags=["internal-admin"])
-async def update_series_tags(
-    series_id: int,
-    request: UpdateTagsRequest,
-    instance_config: dict = Depends(get_sonarr_instance),
-):
-    """Update tags for a series. This replaces all existing tags."""
-    # First get the current series data
-    series_url = f"{instance_config['url']}/api/v3/series/{series_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Get current series data
-        series_response = await client.get(series_url, headers=headers)
-        if series_response.status_code != 200:
-            raise HTTPException(
-                status_code=series_response.status_code,
-                detail=f"Series not found: {series_response.text}"
-            )
-        
-        # Update tags in series data
-        series_data = series_response.json()
-        series_data["tags"] = request.tags
-        
-        # Send updated series data back
-        update_response = await client.put(series_url, json=series_data, headers=headers)
-        
-        if update_response.status_code not in [200, 202]:
-            raise HTTPException(
-                status_code=update_response.status_code,
-                detail=f"Failed to update series tags: {update_response.text}"
-            )
-        
-        return update_response.json()
-
 @router.put("/series/{series_id}/monitor", status_code=200, summary="Update monitoring status for an entire series", operation_id="monitor_sonarr_series", tags=["internal-admin"])
 async def monitor_series(series_id: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
     """Updates the monitoring status for an entire series."""
@@ -479,6 +455,21 @@ async def monitor_series(series_id: int, request: MonitorRequest, instance: dict
         
     updated_series = await sonarr_api_call(instance, f"series/{series_id}", method="PUT", json_data=series_data)
     return updated_series
+
+@router.post(
+    "/series/{series_id}/search",
+    summary="Search for a series upgrade",
+    operation_id="search_for_series_upgrade",
+)
+async def search_for_series_upgrade(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Triggers a search for a series to find a better quality version. This is a non-destructive action."""
+    await sonarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "SeriesSearch", "seriesId": series_id},
+    )
+    return {"message": f"Triggered search for series {series_id}."}
 
 @router.put("/series/{series_id}/seasons/{season_number}/monitor", status_code=200, summary="Update monitoring status for a single season", operation_id="monitor_sonarr_season", tags=["internal-admin"])
 async def monitor_season(series_id: int, season_number: int, request: MonitorRequest, instance: dict = Depends(get_sonarr_instance)):
@@ -500,24 +491,47 @@ async def monitor_season(series_id: int, season_number: int, request: MonitorReq
     return updated_series
 
 
-@router.post("/series/{series_id}/fix", status_code=200, summary="Fix a series by replacing the current release", operation_id="fix_sonarr_release")
-async def fix_series_release(
+@router.post(
+    "/series/{series_id}/episodes/{episode_id}/search",
+    status_code=200,
+    summary="Search for a single episode",
+    operation_id="search_sonarr_episode",
+)
+async def search_episode(
     series_id: int,
     episode_id: int,
-    instance: dict = Depends(get_sonarr_instance)
+    instance: dict = Depends(get_sonarr_instance),
 ):
-    """Fixes a downloaded episode by deleting the file and triggering a new search. Requires episode_id from get_episodes."""
-    # 1. Delete the file
-    episode_files = await sonarr_api_call(instance, "episodefile", params={"seriesId": series_id})
-    files_to_delete = [f["id"] for f in episode_files if episode_id in f.get("episodeIds", [])]
+    """Trigger a search for an individual episode without deleting existing files."""
 
-    for file_id in files_to_delete:
-        await sonarr_api_call(instance, f"episodefile/{file_id}", method="DELETE")
+    await sonarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "EpisodeSearch", "episodeIds": [episode_id]},
+    )
 
-    # 2. Trigger a new search for the episode
-    await sonarr_api_call(instance, "command", method="POST", json_data={"name": "EpisodeSearch", "episodeIds": [episode_id]})
+    return {"message": f"Triggered search for episode {episode_id}."}
 
-    return {"message": f"Successfully deleted the file for episode {episode_id} and triggered a new search."}
+
+@router.post("/series/{series_id}/fix", response_model=Series, summary="Replace a damaged series", operation_id="fix_sonarr_series")
+async def fix_series(series_id: int, instance: dict = Depends(get_sonarr_instance)):
+    """Deletes, re-adds, and searches for a series. WARNING: This is a destructive action. For routine quality upgrades, use the '/series/{series_id}/search' endpoint instead."""
+    # Get series details to get the title
+    try:
+        series = await sonarr_api_call(instance, f"series/{series_id}")
+        title_to_add = series["title"]
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"Series with ID {series_id} not found.")
+        raise e
+
+    # Delete the series
+    await delete_series(series_id, deleteFiles=True, addImportExclusion=False, instance=instance)
+
+    # Re-add the series by title
+    added_series = await add_series_by_title_sonarr(title_to_add, instance)
+    return added_series
 
 
 @router.post("/series/{series_id}/season/{season_number}/search", status_code=200, summary="Trigger a search for an entire season", operation_id="season_search")

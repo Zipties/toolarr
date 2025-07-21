@@ -10,16 +10,16 @@ from instance_endpoints import get_radarr_instance
 class Movie(BaseModel):
     id: int
     title: str
-    path: str
-    tmdbId: int
+    path: Optional[str] = None
+    tmdbId: Optional[int] = None
     monitored: bool
-    rootFolderPath: str
-    qualityProfileId: int
+    rootFolderPath: Optional[str] = None
+    qualityProfileId: Optional[int] = None
     qualityProfileName: Optional[str] = None
     year: Optional[int] = None
     hasFile: Optional[bool] = None
     tags: List[int] = []
-    statistics: dict = {}
+    statistics: Optional[dict] = None
 
 class MoveMovieRequest(BaseModel):
     rootFolderPath: str = Field(..., description="The new root folder path for the movie.")
@@ -90,12 +90,14 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Error connecting to Radarr: {str(e)}.")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library", response_model=List[Movie], summary="Check if a movie exists in the Radarr library")
+@router.get("/library/movies", response_model=List[Movie], operation_id="search_radarr_library_for_movies", summary="Search Radarr library for movies.")
 async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a movie in the library. Prefer 'find_movies_with_tags' for user-facing output."""
+    """Searches for a movie in the library. For user output, prefer 'find_movies_with_tags'."""
     all_movies = await radarr_api_call(instance, "movie")
     
     # Get quality profiles to map IDs to names
@@ -112,6 +114,15 @@ async def find_movie_in_library(term: str, instance: dict = Depends(get_radarr_i
             filtered_movies.append(m)
     
     return filtered_movies
+
+@router.get("/movie/id_lookup", summary="Get the movie ID for a given title.", operation_id="get_radarr_movie_id_by_title")
+async def get_movie_id_by_title(title: str, instance: dict = Depends(get_radarr_instance)):
+    """Looks up a movie by title and returns its ID. Use this to get the movie_id for other operations."""
+    all_movies = await radarr_api_call(instance, "movie")
+    for m in all_movies:
+        if title.lower() == m.get("title", "").lower():
+            return {"movie_id": m["id"]}
+    raise HTTPException(status_code=404, detail=f"Movie with title '{title}' not found.")
 
 @router.get("/search", summary="Search for a movie by term")
 async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
@@ -161,6 +172,7 @@ class AddMovieRequest(BaseModel):
     tmdbId: int
     qualityProfileId: Optional[int] = None
     rootFolderPath: Optional[str] = None
+    searchForMovie: bool = True
 
 @router.post("/movie", response_model=Movie, summary="Add a new movie to Radarr")
 async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radarr_instance)):
@@ -201,7 +213,7 @@ async def add_movie(request: AddMovieRequest, instance: dict = Depends(get_radar
         "qualityProfileId": quality_profile_id,
         "rootFolderPath": root_folder_path,
         "monitored": True,
-        "addOptions": {"searchForMovie": True}
+        "addOptions": {"searchForMovie": request.searchForMovie}
     }
 
     # Add the movie to Radarr
@@ -300,7 +312,7 @@ class MonitorRequest(BaseModel):
 
 @router.put("/movie/{movie_id}", operation_id="update_radarr_movie_properties", summary="Update movie properties")
 async def update_movie(movie_id: int, request: UpdateMovieRequest, instance: dict = Depends(get_radarr_instance)):
-    """Updates properties of a specific movie, such as monitoring status or quality profile."""
+    """Updates movie properties. To remove a tag, get the movie's current tags, then submit a new list of tags that excludes the one to be removed. This replaces the entire list of tags for the movie."""
     # If a new root folder is provided, handle the move operation.
     if request.newRootFolderPath:
         move_payload = {
@@ -352,7 +364,7 @@ async def get_tag_map(instance_config: dict) -> dict:
     return {tag['id']: tag['label'] for tag in tags}
 
 # Tag management endpoints
-@router.get("/radarr/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags", tags=["internal-admin"])
+@router.get("/radarr/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
 async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
 ):
@@ -392,41 +404,6 @@ async def create_tag(
     
     return response.json()
 
-@router.put("/movie/{movie_id}/tags", summary="Update tags for a movie in Radarr (NOT for TV shows)", operation_id="update_movie_tags_radarr", tags=["internal-admin"])
-async def update_movie_tags(
-    movie_id: int,
-    request: UpdateTagsRequest,
-    instance_config: dict = Depends(get_radarr_instance),
-):
-    """Update tags for a movie. This replaces all existing tags."""
-    # First get the current movie data
-    movie_url = f"{instance_config['url']}/api/v3/movie/{movie_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Get current movie data
-        movie_response = await client.get(movie_url, headers=headers)
-        if movie_response.status_code != 200:
-            raise HTTPException(
-                status_code=movie_response.status_code,
-                detail=f"Movie not found: {movie_response.text}"
-            )
-        
-        # Update tags in movie data
-        movie_data = movie_response.json()
-        movie_data["tags"] = request.tags
-        
-        # Send updated movie data back
-        update_response = await client.put(movie_url, json=movie_data, headers=headers)
-        
-        if update_response.status_code not in [200, 202]:
-            raise HTTPException(
-                status_code=update_response.status_code,
-                detail=f"Failed to update movie tags: {update_response.text}"
-            )
-        
-        return update_response.json()
-
 @router.put("/movie/{movie_id}/monitor", status_code=200, summary="Update monitoring status for a movie", operation_id="monitor_radarr_movie", tags=["internal-admin"])
 async def monitor_movie(movie_id: int, request: MonitorRequest, instance: dict = Depends(get_radarr_instance)):
     """Updates the monitoring status for a movie."""
@@ -436,9 +413,25 @@ async def monitor_movie(movie_id: int, request: MonitorRequest, instance: dict =
     return updated_movie
 
 
-@router.post("/movie/{movie_id}/fix", response_model=Movie, summary="Fix a movie by re-downloading it", operation_id="fix_radarr_movie")
+@router.post(
+    "/movie/{movie_id}/search",
+    summary="Search for a movie upgrade",
+    operation_id="search_for_movie_upgrade",
+)
+async def search_for_movie_upgrade(movie_id: int, instance: dict = Depends(get_radarr_instance)):
+    """Triggers a search for a movie to find a better quality version. This is a non-destructive action."""
+    await radarr_api_call(
+        instance,
+        "command",
+        method="POST",
+        json_data={"name": "MovieSearch", "movieIds": [movie_id]},
+    )
+    return {"message": f"Triggered search for movie {movie_id}."}
+
+
+@router.post("/movie/{movie_id}/fix", response_model=Movie, summary="Replace a damaged movie file", operation_id="fix_radarr_movie")
 async def fix_movie(movie_id: int, instance: dict = Depends(get_radarr_instance)):
-    """Fixes a movie by deleting it, re-adding it, and triggering a new search."""
+    """Deletes, re-adds, and searches for a movie. WARNING: This is a destructive action. For routine quality upgrades, use the '/movie/{movie_id}/search' endpoint instead."""
     # Get movie details to get the title
     try:
         movie = await radarr_api_call(instance, f"movie/{movie_id}")
