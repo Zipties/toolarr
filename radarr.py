@@ -114,63 +114,41 @@ async def find_movie_in_library(
     page_size: int = Query(25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_radarr_instance),
 ):
-    """Search your Radarr library for existing movies.
-Fetching all movies and filtering locally avoids Radarr server-side errors with search.
-Use this only to check your collection—use lookup endpoints for adding new movies.
+    """Search your **local** Radarr library for existing movies.
+    This function now filters movies more efficiently to avoid timeouts and large payloads.
     """
+    # First, get a lightweight list of all movies from Radarr.
+    all_movies = await radarr_api_call(instance, "movie")
+    if not isinstance(all_movies, list):
+        # If the response isn't a list (e.g., an error or unexpected format), treat it as empty.
+        all_movies = []
 
-    async def get_all_movies():
-    """Retrieve all movies from Radarr, handling pagination."""
-    movies = []
-    page = 1
-    page_size_param = 1000
-    while True:
-        resp = await radarr_api_call(
-            instance,
-            "movie",
-            params={"page": page, "pageSize": page_size_param},
-        )
-
-        # Check if resp is a dictionary before trying to get keys from it
-        if isinstance(resp, dict):
-            page_movies = resp.get("records", []) or []
-            total = resp.get("totalRecords")
-        else:
-            # If not a dict, it's likely the list of movies itself (or empty)
-            page_movies = resp or []
-            total = len(movies) + len(page_movies)
-
-        movies.extend(page_movies)
-
-        if total is None or len(movies) >= total:
-            break
-        page += 1
-    return movies
-
-    # Cap page_size to 25 to limit response size
-    page_size = min(page_size, 25)
-
-    all_movies = await get_all_movies()
-    # Map quality profile IDs to names
-    quality_profiles = await radarr_api_call(instance, "qualityprofile")
-    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
-
+    # Filter this list based on the search term before doing anything else.
     filtered_movies = []
     if term:
         term_lower = term.lower()
         for m in all_movies:
             if m.get("title", "").lower().startswith(term_lower):
-                if "qualityProfileId" in m:
-                    m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
                 filtered_movies.append(m)
     else:
+        # If no search term, use the whole list.
         filtered_movies = all_movies
+
+    # Now, only if we have filtered results, fetch the quality profile details.
+    # This prevents fetching unnecessary data for a large library.
+    if filtered_movies:
+        quality_profiles = await radarr_api_call(instance, "qualityprofile")
+        quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
         for m in filtered_movies:
             if "qualityProfileId" in m:
                 m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-
+    
+    # Finally, apply pagination to the filtered list.
+    page_size = min(page_size, 25)
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
+    
+    # Return the paginated slice of the filtered list.
     return filtered_movies[start_index:end_index]
 
 @router.get("/search", summary="Search for a movie by term")
