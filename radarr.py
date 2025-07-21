@@ -104,15 +104,15 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
 
 @router.get(
     "/library",
-    response_model=List[Series], 
-    summary="Check if a series exists in the Sonarr library",
-    operation_id="find_sonarr_series"
+    response_model=List[Movie],
+    summary="Check if a movie exists in the Radarr library",
+    operation_id="find_radarr_movies",
 )
-async def find_series_in_library(
-    term: Optional[str] = Query(default=None, description="The search term to filter by."),
-    page: int = Query(default=1, description="The page number to retrieve."),
-    page_size: int = Query(default=25, description="The number of items per page (max 25)."),
-    instance: dict = Depends(get_sonarr_instance)
+async def find_movie_in_library(
+    term: Optional[str] = Query(None, description="The search term to filter by."),
+    page: int = Query(1, description="The page number to retrieve."),
+    page_size: int = Query(25, description="The number of items per page (max 25)."),
+    instance: dict = Depends(get_radarr_instance),
 ):
     """Search your **local** Radarr library for existing movies.
 
