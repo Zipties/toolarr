@@ -126,7 +126,8 @@ async def find_series_in_library(
     page_size = min(page_size, 25)
 
     # Sonarr's API does not support pagination, so we must fetch all series.
-    all_series = await sonarr_api_call(instance, "series") or [] # <--- THIS IS THE LINE TO CHANGE
+    series_data = await sonarr_api_call(instance, "series") or {}
+    all_series = series_data.get("records", series_data) or []
 
 
     # Map quality profile IDs to names
