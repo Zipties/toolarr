@@ -509,36 +509,6 @@ async def monitor_season(series_id: int, season_number: int, request: MonitorReq
 
 
 @router.post(
-    "/series/{series_id}/fix",
-    status_code=200,
-    summary="Replace a damaged episode file",
-    operation_id="fix_sonarr_release",
-)
-async def fix_series_release(
-    series_id: int,
-    episode_id: int,
-    instance: dict = Depends(get_sonarr_instance)
-):
-    """Replace a corrupted or unwanted episode file.
-
-    The endpoint deletes the specified file and triggers a search for a new copy.
-    It should not be used as a general upgrade mechanism.
-    Requires ``episode_id`` from :func:`get_episodes`.
-    """
-    # 1. Delete the file
-    episode_files = await sonarr_api_call(instance, "episodefile", params={"seriesId": series_id})
-    files_to_delete = [f["id"] for f in episode_files if episode_id in f.get("episodeIds", [])]
-
-    for file_id in files_to_delete:
-        await sonarr_api_call(instance, f"episodefile/{file_id}", method="DELETE")
-
-    # 2. Trigger a new search for the episode
-    await sonarr_api_call(instance, "command", method="POST", json_data={"name": "EpisodeSearch", "episodeIds": [episode_id]})
-
-    return {"message": f"Successfully deleted the file for episode {episode_id} and triggered a new search."}
-
-
-@router.post(
     "/series/{series_id}/episodes/{episode_id}/search",
     status_code=200,
     summary="Search for a single episode",
@@ -594,8 +564,6 @@ async def search_series(series_id: int, instance: dict = Depends(get_sonarr_inst
         json_data={"name": "SeriesSearch", "seriesId": series_id},
     )
     return {"message": f"Triggered search for series {series_id}."}
-
-
 @router.delete("/series/{series_id}", status_code=200, summary="Delete a series from Sonarr", operation_id="delete_sonarr_series")
 async def delete_series(
     series_id: int,

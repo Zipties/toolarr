@@ -111,8 +111,27 @@ async def find_movie_in_library(
     fetch all movies and filter locally when a search term is provided.
     """
 
-    all_movies = await radarr_api_call(instance, "movie")
+    async def get_all_movies():
+        """Retrieve all movies from Radarr, handling pagination."""
+        movies = []
+        page = 1
+        page_size_param = 1000
+        while True:
+            resp = await radarr_api_call(
+                instance,
+                "movie",
+                params={"page": page, "pageSize": page_size_param},
+            )
+            page_movies = resp.get("records", resp) or []
+            movies.extend(page_movies)
 
+            total = resp.get("totalRecords")
+            if total is None or len(movies) >= total:
+                break
+            page += 1
+        return movies
+
+    all_movies = await get_all_movies()
     # Map quality profile IDs to names
     quality_profiles = await radarr_api_call(instance, "qualityprofile")
     quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
