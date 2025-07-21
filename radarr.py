@@ -111,7 +111,7 @@ async def radarr_api_call(instance: dict, endpoint: str, method: str = "GET", pa
 async def find_movie_in_library(
     term: Optional[str] = Query(default=None, description="The search term to filter by."),
     page: int = Query(default=1, description="The page number to retrieve."),
-    page_size: int = Query(default=25, description="The number of items per page."),
+    page_size: int = Query(default=25, le=25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_radarr_instance),
 ):
     """Search your **local** Radarr library for existing movies.
@@ -142,6 +142,9 @@ async def find_movie_in_library(
             page += 1
         return movies
 
+    # Cap page_size to 25 to limit response size
+    page_size = min(page_size, 25)
+
     all_movies = await get_all_movies()
     # Map quality profile IDs to names
     quality_profiles = await radarr_api_call(instance, "qualityprofile")
@@ -151,7 +154,7 @@ async def find_movie_in_library(
     if term:
         term_lower = term.lower()
         for m in all_movies:
-            if term_lower in m.get("title", "").lower():
+            if m.get("title", "").lower().startswith(term_lower):
                 if "qualityProfileId" in m:
                     m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
                 filtered_movies.append(m)

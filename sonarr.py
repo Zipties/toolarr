@@ -117,10 +117,13 @@ async def get_episodes(series_id: int, instance: dict = Depends(get_sonarr_insta
 async def find_series_in_library(
     term: Optional[str] = Query(default=None, description="The search term to filter by."),
     page: int = Query(default=1, description="The page number to retrieve."),
-    page_size: int = Query(default=25, description="The number of items per page."),
+    page_size: int = Query(default=25, le=25, description="The number of items per page (max 25)."),
     instance: dict = Depends(get_sonarr_instance)
 ):
     """Search the Sonarr library with in-app pagination."""
+
+    # Cap page_size at 25 to avoid returning overly large responses
+    page_size = min(page_size, 25)
 
     # Sonarr's API does not support pagination, so we must fetch all series.
     all_series = await sonarr_api_call(instance, "series") or []
@@ -134,7 +137,7 @@ async def find_series_in_library(
     if term:
         term_lower = term.lower()
         for s in all_series:
-            if term_lower in s.get("title", "").lower():
+            if s.get("title", "").lower().startswith(term_lower):
                 if "qualityProfileId" in s:
                     s["qualityProfileName"] = quality_profile_map.get(
                         s["qualityProfileId"], "Unknown"
