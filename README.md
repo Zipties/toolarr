@@ -1,15 +1,15 @@
 <div align="center">
-
+  <img width="1310" height="1626" alt="Toolarr in action with Open WebUI" src="https://github.com/user-attachments/assets/6e8ea6cf-f0f7-43ac-8f65-ea7d62567bf0" />
   <h1>Toolarr: A Stateless API Bridge for Sonarr & Radarr</h1>
   <p>
     <strong>A high-performance, privacy-focused, and AI-native API server that connects AI assistants like Open WebUI and ChatGPT to your Sonarr and Radarr instances for seamless media management.</strong>
   </p>
   <p>
     <a href="#overview">Overview</a> •
-    <a href="#key-features">Features</a> •
+    <a href="#key-features">Key Features</a> •
     <a href="#ai-integration">AI Integration</a> •
     <a href="#getting-started">Getting Started</a> •
-    <a href="#api-endpoints">API Endpoints</a>
+    <a href="#example-prompts">Example Prompts</a>
   </p>
 </div>
 
