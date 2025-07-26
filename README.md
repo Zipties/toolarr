@@ -1,36 +1,92 @@
-<img width="1310" height="1626" alt="vivaldi_oSan3uImz1" src="https://github.com/user-attachments/assets/6e8ea6cf-f0f7-43ac-8f65-ea7d62567bf0" />
-                                  
-# Toolarr: Sonarr & Radarr API Bridge for AI
+<div align="center">
+  <img width="1310" height="1626" alt="Toolarr in action with Open WebUI" src="https://github.com/user-attachments/assets/6e8ea6cf-f0f7-43ac-8f65-ea7d62567bf0" />
+  <h1>Toolarr: A Stateless API Bridge for Sonarr & Radarr</h1>
+  <p>
+    <strong>A high-performance, privacy-focused, and AI-native API server that connects AI assistants like Open WebUI and ChatGPT to your Sonarr and Radarr instances for seamless media management.</strong>
+  </p>
+  <p>
+    <a href="#overview">Overview</a> •
+    <a href="#key-features">Features</a> •
+    <a href="#ai-integration">AI Integration</a> •
+    <a href="#getting-started">Getting Started</a> •
+    <a href="#api-endpoints">API Endpoints</a>
+  </p>
+</div>
 
-Toolarr exposes a clean, tool-friendly API that allows AI assistants (like Open WebUI) to manage your Sonarr and Radarr media libraries using natural language.
+Toolarr is engineered to be a lightweight and efficient pass-through API bridge, addressing the common performance and privacy issues found in other media management tools. It provides a clean, unified interface for all your Sonarr and Radarr instances without retaining any state or logging user data.
 
+Its core design principle is statelessness; instance configurations are loaded from environment variables on-demand for each request, ensuring minimal overhead and maximum speed.
 
-##  Connect to Open WebUI
+***
 
-1. In Open WebUI, go to **Settings > Tools** and click **Add Tool**.
-2. Enter the OpenAPI schema URL: `http://<your-docker-host-ip>:8000`
-3. Set the authentication type to **Bearer Token** and enter your `TOOL_API_KEY`.
+### Overview
 
-##  Features
+-   **High-Performance and Stateless:** By avoiding a persistent state, Toolarr offers a significant speed advantage and a smaller resource footprint compared to traditional management servers.
+-   **Privacy-Focused:** The service is a pass-through proxy. No request data is ever logged, collected, or stored, ensuring your privacy.
+-   **Optimized for AI:** Toolarr is not just compatible with AI; it's designed for it. It generates a specially pruned OpenAPI schema to work flawlessly within the constraints of custom GPTs and other AI tools.
+-   **Unified Multi-Instance Support:** Manage any number of Sonarr and Radarr servers through a single, consistent API interface.
+-   **Secure by Default:** All API endpoints are protected by Bearer Token authentication, and your underlying Sonarr/Radarr API keys are never exposed in responses.
+-   **Simple Docker Deployment:** Deploys as a lightweight, multi-stage Docker container for a fast and simple setup.
 
-- **Unified API**: Manage multiple Sonarr and Radarr instances through a single, consistent interface.
-- **Library Management**: Search for media, view quality profiles, move content, and update monitoring status.
-- **Media Management**: Add and delete movies and TV shows, including their files.
-- **Tagging**: Create, view, assign, and delete tags.
-- **Queue Control**: View download queues and history, and remove items from the queue.
+***
 
-## 💬 Example Prompts
+### Key Features
 
-- "What quality profile is assigned to The Matrix?"
-- "Show me the Sonarr download queue."
-- "Find all movies with the '4K' quality profile."
-- "Delete the stuck download for Breaking Bad."
+Toolarr provides a comprehensive suite of endpoints for robust media management.
 
-## 🔒 Security
+-   **Media Management:** Add new movies and TV shows via title or ID (TMDb/TVDb), and delete existing media, including the underlying files.
+-   **Library Updates:** Modify monitoring status, change quality profiles, update paths, and move media files to new root folders.
+-   **Intelligent Search:** Trigger searches for missing media, specific seasons, or non-destructive quality upgrades.
+-   **System & Library Information:** Perform library-wide searches, retrieve detailed media information with quality profiles, and get a list of all configured root folders.
+-   **Tagging:** Full support for listing, creating, assigning, and removing tags from your media.
+-   **Download Queue Management:** View the current download queue and history, and remove stuck or unwanted items directly.
 
-- All endpoints require Bearer token authentication.
-- Your Sonarr/Radarr API keys are never exposed in responses.
+***
 
-## 📄 License
+### AI Integration
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+A key feature of Toolarr is its built-in OpenAPI schema generator, which creates two distinct specification files during the build process.
+
+1.  `openapi.json`: The full, comprehensive API specification for use with tools like Open WebUI.
+2.  `openapi-chatgpt.json`: A pruned specification file designed explicitly for AI models with endpoint limitations. This version automatically excludes all endpoints tagged as "internal-admin," ensuring it respects the **30-endpoint limit** for tools in platforms like OpenAI's custom GPTs. This makes Toolarr an ideal backend for creating powerful, custom "Media Manager" GPTs.
+
+***
+
+### Getting Started
+
+Deployment is handled via Docker and requires minimal configuration.
+
+1.  **Configure Environment:** Copy `.env.example` to `.env` and populate it with your instance URLs and API keys.
+    ```bash
+    cp .env.example .env
+    nano .env
+    ```
+
+2.  **Launch Service:** Use the provided `docker-compose.yml` to build and run the service.
+    ```bash
+    docker-compose up -d
+    ```
+
+3.  **Connect to AI Assistant:**
+    -   **Open WebUI:** Navigate to **Settings > Tools** and select **Add Tool**.
+    -   **Custom GPT (ChatGPT):** Create a new GPT, go to **Configure > Actions > Add an action**, and choose "Import from URL."
+    -   **Schema URL:**
+        -   For full functionality (e.g., Open WebUI): `http://<your-docker-host-ip>:8000/openapi.json`
+        -   For ChatGPT or other limited platforms: `http://<your-docker-host-ip>:8000/openapi-chatgpt.json`
+    -   **Authentication:** Set the authentication method to **Bearer Token** and provide the `TOOL_API_KEY` from your `.env` file.
+
+### Example Prompts
+
+-   "In Radarr, search for the movie 'Dune: Part Two'."
+-   "Add the TV show 'Fallout' to Sonarr and search for missing episodes."
+-   "What's currently in the Sonarr download queue?"
+-   "Delete the movie 'The Emoji Movie' from the default Radarr instance, and also delete the files."
+-   "Find all movies in my library with the '4K' quality profile."
+-   "Trigger an upgrade search for 'Oppenheimer'."
+-   "The series 'Loki' appears to be having issues. Run the fix command for it on the Sonarr instance."
+
+***
+
+### License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
