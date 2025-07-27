@@ -21,8 +21,8 @@ Its core design principle is statelessness; instance configurations are loaded f
 
 ### Overview
 
--   **High-Performance and Stateless:** By avoiding a persistent state, Toolarr offers a significant speed advantage and a smaller resource footprint compared to traditional management servers.
--   **Privacy-Focused:** The service is a pass-through proxy. No request data is ever logged, collected, or stored, ensuring your privacy.
+-   **High-Performance and Stateless:** I made this because the *arr MPC servers I have tried were fun, but were slow, clunky, and tended to overrun context of an LLM quickly. i wanted something I could tie into my voice assistant, so it needed to be more focused in its API calls
+
 -   **Optimized for AI:** Toolarr is not just compatible with AI; it's designed for it. It generates a specially pruned OpenAPI schema to work flawlessly within the constraints of custom GPTs and other AI tools.
 -   **Unified Multi-Instance Support:** Manage any number of Sonarr and Radarr servers through a single, consistent API interface.
 -   **Secure by Default:** All API endpoints are protected by Bearer Token authentication, and your underlying Sonarr/Radarr API keys are never exposed in responses.
