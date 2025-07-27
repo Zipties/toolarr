@@ -85,8 +85,7 @@ Deployment is handled via Docker and requires minimal configuration.
 -   "Trigger an upgrade search for 'Oppenheimer'."
 -   "The series 'Loki' appears to be having issues. Run the fix command for it on the Sonarr instance."
 
-***
-
+***Note:*** This exposes endpoints that can delete your files, and should be respected as such. In the future I plan to add env vars to limit which endpoints can be used
 ### License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
