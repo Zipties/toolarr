@@ -79,7 +79,6 @@ async def sonarr_api_call(
                 json=json_data,
                 headers=headers,
             )
-
         response.raise_for_status()
         if response.status_code == 204 or not response.text:
             return None
@@ -90,7 +89,6 @@ async def sonarr_api_call(
         raise HTTPException(status_code=502, detail=f"Error connecting to Sonarr: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
-
 class Episode(BaseModel):
     id: int
     seriesId: int

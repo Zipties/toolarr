@@ -84,19 +84,22 @@ async def radarr_api_call(
                 json=json_data,
                 headers=headers,
             )
+            response.raise_for_status()
 
-        response.raise_for_status()
+            if response.status_code == 204 or not response.text:
+                return None
 
-        if response.status_code == 204 or not response.text:
-            return None
+            return response.json()
 
-        return response.json()
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code,
+                            detail=f"Radarr API error: {e.response.text}")
     except httpx.RequestError as e:
-        raise HTTPException(status_code=502, detail=f"Error connecting to Radarr: {str(e)}")
+        raise HTTPException(status_code=502,
+                            detail=f"Error connecting to Radarr: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
+        raise HTTPException(status_code=500,
+                            detail=f"Error communicating with Radarr: {str(e)}")
 
 @router.get("/library/movies", response_model=List[Movie], operation_id="search_radarr_library_for_movies", summary="Search Radarr library for movies.")
 async def find_movie_in_library(
