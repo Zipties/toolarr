@@ -66,39 +66,35 @@ async def radarr_api_call(
     endpoint: str,
     request: Request,
     method: str = "GET",
-    params: dict = None,
-    json_data: dict = None,
-):
+    params: dict | None = None,
+    json_data: dict | None = None,
+) -> dict | None:
     """Make an API call to a specific Radarr instance."""
+    base_url = instance["url"].rstrip("/")
+    path = endpoint.lstrip("/")
+    url = f"{base_url}/api/v3/{path}"
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
-    url = f"{instance['url']}/api/v3/{endpoint}"
-    print(f"Calling Radarr API: {method} {url} with params: {params}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            if method == "GET":
-                response = await client.get(url, headers=headers, params=params)
-            elif method == "POST":
-                response = await client.post(url, headers=headers, json=json_data, params=params)
-            elif method == "PUT":
-                response = await client.put(url, headers=headers, json=json_data, params=params)
-            elif method == "DELETE":
-                response = await client.delete(url, headers=headers, params=params)
-            else:
-                raise HTTPException(status_code=405, detail="Method not allowed")
+            response = await client.request(
+                method,
+                url,
+                params=params,
+                json=json_data,
+                headers=headers,
+            )
 
-            print(f"Radarr API response: {response.status_code}")
-            response.raise_for_status()
+        response.raise_for_status()
 
-            # Handle successful empty responses
-            if response.status_code == 204 or not response.text:
-                return None
+        if response.status_code == 204 or not response.text:
+            return None
 
-            return response.json()
+        return response.json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
     except httpx.RequestError as e:
-        raise HTTPException(status_code=502, detail=f"Error connecting to Radarr: {str(e)}.")
+        raise HTTPException(status_code=502, detail=f"Error connecting to Radarr: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Radarr: {str(e)}")
 
