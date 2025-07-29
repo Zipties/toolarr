@@ -66,6 +66,10 @@ Deployment is handled via Docker and requires minimal configuration.
     ```bash
     docker-compose up -d
     ```
+    The container automatically generates `openapi.json` and `openapi-chatgpt.json` on startup. If you need to regenerate them later, run:
+    ```bash
+    python generate_openapi.py
+    ```
 
 3.  **Connect to AI Assistant:**
     -   **Open WebUI:** Navigate to **Settings > Tools** and select **Add Tool**.
