@@ -63,23 +63,22 @@ async def sonarr_api_call(
     method: str = "GET",
     params: dict | None = None,
     json_data: dict | None = None,
-):
-    """Make an API call to a specific Sonarr instance using the shared client."""
-    client: httpx.AsyncClient = request.app.state.http_client
+) -> dict | None:
+    """Make an API call to a specific Sonarr instance."""
     base_url = instance["url"].rstrip("/")
     path = endpoint.lstrip("/")
-    headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{base_url}/api/v3/{path}"
+    headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
 
     try:
-        response = await client.request(
-            method,
-            url,
-            params=params,
-            json=json_data,
-            headers=headers,
-        )
-
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(
+                method,
+                url,
+                params=params,
+                json=json_data,
+                headers=headers,
+            )
         response.raise_for_status()
         if response.status_code == 204 or not response.text:
             return None
@@ -90,7 +89,6 @@ async def sonarr_api_call(
         raise HTTPException(status_code=502, detail=f"Error connecting to Sonarr: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Sonarr: {str(e)}")
-
 class Episode(BaseModel):
     id: int
     seriesId: int
