@@ -112,42 +112,6 @@ async def get_episodes(
     """Retrieves all episodes for a given series."""
     return await sonarr_api_call(instance, "episode", client, params={"seriesId": series_id})
 
-@router.get("/library/series", response_model=List[Series], operation_id="search_sonarr_library_for_series", summary="Search Sonarr library for series.")
-async def find_series_in_library(
-    term: str,
-    instance: dict = Depends(get_sonarr_instance),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """Searches for a series in the library. For user output, prefer 'find_series_with_tags'."""
-    all_series = await sonarr_api_call(instance, "series", client)
-    
-    # Get quality profiles to map IDs to names
-    quality_profiles = await sonarr_api_call(instance, "qualityprofile", client)
-    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
-    
-    # Filter series and add quality profile name
-    filtered_series = []
-    for s in all_series:
-        if term.lower() in s.get("title", "").lower():
-            # Add quality profile name to the series object
-            if "qualityProfileId" in s:
-                s["qualityProfileName"] = quality_profile_map.get(s["qualityProfileId"], "Unknown")
-            filtered_series.append(s)
-    
-    return filtered_series
-
-@router.get("/series/id_lookup", summary="Get the series ID for a given title.", operation_id="get_sonarr_series_id_by_title")
-async def get_series_id_by_title(
-    title: str,
-    instance: dict = Depends(get_sonarr_instance),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """Looks up a series by title and returns its ID. Use this to get the series_id for other operations."""
-    all_series = await sonarr_api_call(instance, "series", client)
-    for s in all_series:
-        if title.lower() == s.get("title", "").lower():
-            return {"series_id": s["id"]}
-    raise HTTPException(status_code=404, detail=f"Series with title '{title}' not found.")
 
 @router.get("/lookup", summary="Search for a new series to add to Sonarr")
 async def lookup_series(
@@ -380,7 +344,7 @@ async def find_series_with_tags(
     instance: dict = Depends(get_sonarr_instance),
     client: httpx.AsyncClient = Depends(get_http_client),
 ):
-    """Searches library and includes tag names instead of just IDs. Use this for user-facing output."""
+    """Searches the Sonarr library for TV shows and returns detailed results including tag names. Use this endpoint to find a series' ID for other operations."""
     all_series = await sonarr_api_call(instance, "series", client)
     tag_map = await get_tag_map(instance, client)
     
