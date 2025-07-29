@@ -69,32 +69,32 @@ async def radarr_api_call(
     params: dict = None,
     json_data: dict = None,
 ):
-    """Make an API call to a specific Radarr instance using the shared client."""
-    client: httpx.AsyncClient = request.app.state.http_client
+    """Make an API call to a specific Radarr instance."""
     headers = {"X-Api-Key": instance["api_key"], "Content-Type": "application/json"}
     url = f"{instance['url']}/api/v3/{endpoint}"
     print(f"Calling Radarr API: {method} {url} with params: {params}")
-    
+
     try:
-        if method == "GET":
-            response = await client.get(url, headers=headers, params=params)
-        elif method == "POST":
-            response = await client.post(url, headers=headers, json=json_data, params=params)
-        elif method == "PUT":
-            response = await client.put(url, headers=headers, json=json_data, params=params)
-        elif method == "DELETE":
-            response = await client.delete(url, headers=headers, params=params)
-        else:
-            raise HTTPException(status_code=405, detail="Method not allowed")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if method == "GET":
+                response = await client.get(url, headers=headers, params=params)
+            elif method == "POST":
+                response = await client.post(url, headers=headers, json=json_data, params=params)
+            elif method == "PUT":
+                response = await client.put(url, headers=headers, json=json_data, params=params)
+            elif method == "DELETE":
+                response = await client.delete(url, headers=headers, params=params)
+            else:
+                raise HTTPException(status_code=405, detail="Method not allowed")
 
-        print(f"Radarr API response: {response.status_code}")
-        response.raise_for_status()
+            print(f"Radarr API response: {response.status_code}")
+            response.raise_for_status()
 
-        # Handle successful empty responses
-        if response.status_code == 204 or not response.text:
-            return None
+            # Handle successful empty responses
+            if response.status_code == 204 or not response.text:
+                return None
 
-        return response.json()
+            return response.json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"Radarr API error: {e.response.text}")
     except httpx.RequestError as e:
