@@ -130,11 +130,6 @@ async def get_series_id_by_title(title: str, instance: dict = Depends(get_sonarr
             return {"series_id": s["id"]}
     raise HTTPException(status_code=404, detail=f"Series with title '{title}' not found.")
 
-@router.get("/search", summary="Search for a new series by term")
-async def search_series(term: str, instance: dict = Depends(get_sonarr_instance)):
-    """Searches for a new series by term and returns the TVDB ID."""
-    return await sonarr_api_call(instance, "series/lookup", params={"term": term})
-
 @router.get("/lookup", summary="Search for a new series to add to Sonarr")
 async def lookup_series(term: str, instance: dict = Depends(get_sonarr_instance)):
     """Searches for a new series by a search term. This is the first step to add a new series."""

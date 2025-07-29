@@ -124,15 +124,6 @@ async def get_movie_id_by_title(title: str, instance: dict = Depends(get_radarr_
             return {"movie_id": m["id"]}
     raise HTTPException(status_code=404, detail=f"Movie with title '{title}' not found.")
 
-@router.get("/search", summary="Search for a movie by term")
-async def search_movie(term: str, instance: dict = Depends(get_radarr_instance)):
-    """Searches for a movie by term and returns the TMDB ID."""
-    try:
-        return await radarr_api_call(instance, "movie/lookup", params={"term": term})
-    except Exception as e:
-        print(f"Error in search_movie: {e}")
-        raise HTTPException(status_code=500, detail="Error searching for movie.")
-
 @router.get("/lookup", summary="Search for a new movie to add to Radarr")
 async def lookup_movie(term: str, instance: dict = Depends(get_radarr_instance)):
     """Searches for a new movie by a search term. This is the first step to add a new movie."""
