@@ -108,7 +108,7 @@ async def find_movie_in_library(
     instance: dict = Depends(get_radarr_instance),
     client: httpx.AsyncClient = Depends(get_http_client),
 ):
-    """Searches for a movie in the library. For user output, prefer 'find_movies_with_tags'."""
+    """Searches the Radarr library for movies by a search term. Use this endpoint to find a movie's ID for other operations. The results include the movie ID, title, and quality profile."""
     all_movies = await radarr_api_call(instance, "movie", client)
     
     # Get quality profiles to map IDs to names
@@ -125,19 +125,6 @@ async def find_movie_in_library(
             filtered_movies.append(m)
     
     return filtered_movies
-
-@router.get("/movie/id_lookup", summary="Get the movie ID for a given title.", operation_id="get_radarr_movie_id_by_title")
-async def get_movie_id_by_title(
-    title: str,
-    instance: dict = Depends(get_radarr_instance),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """Looks up a movie by title and returns its ID. Use this to get the movie_id for other operations."""
-    all_movies = await radarr_api_call(instance, "movie", client)
-    for m in all_movies:
-        if title.lower() == m.get("title", "").lower():
-            return {"movie_id": m["id"]}
-    raise HTTPException(status_code=404, detail=f"Movie with title '{title}' not found.")
 
 @router.get("/lookup", summary="Search for a new movie to add to Radarr")
 async def lookup_movie(
