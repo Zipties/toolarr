@@ -66,7 +66,11 @@ Deployment is handled via Docker and requires minimal configuration.
     ```bash
     docker-compose up -d
     ```
+<<<<<<< HEAD
     The container automatically generates `openapi.json` and `openapi-chatgpt.json` on startup. If you need to regenerate them later, run:
+=======
+    The container generates `openapi.json` and `openapi-chatgpt.json` during the Docker build and again each time it starts. If you ever need to regenerate them manually, run:
+>>>>>>> b6c12e3 (Regenerate OpenAPI during build and startup)
     ```bash
     python generate_openapi.py
     ```

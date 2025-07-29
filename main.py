@@ -84,6 +84,9 @@ async def root():
 @app.get("/openapi-chatgpt.json", include_in_schema=False)
 async def get_pruned_openapi():
     """Serves the pruned OpenAPI spec for ChatGPT."""
-    with open("openapi-chatgpt.json", "r") as f:
-        return json.load(f)
+    try:
+        with open("openapi-chatgpt.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="OpenAPI spec not found")
 
