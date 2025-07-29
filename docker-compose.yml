@@ -1,6 +1,6 @@
 services:
   toolarr:
-    image: 192.168.45.15:5000/toolarr:build-015
+    image: 192.168.45.15:5000/toolarr:latest
 # Option 1: Use environment variables from .env file (recommended)
 #    env_file: .env 
     environment:
@@ -21,7 +21,7 @@ services:
     deploy:
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.toolarr.rule=Host(`toolarr.moderncaveman.us`)"
+        - "traefik.http.routers.toolarr.rule=Host(`toolarr.domain.us`)"
         - "traefik.http.routers.toolarr.entrypoints=websecure"
         - "traefik.http.services.toolarr.loadbalancer.server.port=8000"
       mode: global
