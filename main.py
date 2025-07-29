@@ -1,13 +1,12 @@
 import os
 import json
+import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
 
-from sonarr import router as sonarr_router
 from instance_endpoints import instances_router
-from radarr import router as radarr_router
 
 
 # --- App Initialization ---
@@ -63,17 +62,33 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
         )
     return credentials.credentials
 
+# Shared HTTP client will be initialized on startup
+http_client: httpx.AsyncClient
+
+# --- Startup Event ---
+@app.on_event("startup")
+async def startup_event():
+    """Initialize shared HTTP client."""
+    global http_client
+    http_client = httpx.AsyncClient(timeout=30.0)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close shared HTTP client on shutdown."""
+    await http_client.aclose()
+
+async def get_http_client():
+    """Dependency to provide the shared HTTP client."""
+    return http_client
+
+from sonarr import router as sonarr_router
+from radarr import router as radarr_router
+
 # --- Routers ---
 # Include the Sonarr and Radarr routers, with security dependency
 app.include_router(sonarr_router, dependencies=[Depends(verify_api_key)])
 app.include_router(radarr_router, dependencies=[Depends(verify_api_key)])
 app.include_router(instances_router, dependencies=[Depends(verify_api_key)])
-
-# --- Startup Event ---
-@app.on_event("startup")
-async def startup_event():
-    """This is a placeholder and is not used in the final image."""
-    pass
 
 # --- Root Endpoint ---
 @app.get("/", summary="Health check", tags=["internal-admin"])
