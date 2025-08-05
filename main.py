@@ -1,7 +1,6 @@
 import os
 import json
-import httpx
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
@@ -62,22 +61,6 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
         )
     return credentials.credentials
 
-# Shared HTTP client stored on application state
-
-# --- Startup Event ---
-@app.on_event("startup")
-async def startup_event():
-    """Initialize shared HTTP client."""
-    app.state.http_client = httpx.AsyncClient(timeout=30.0)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Close shared HTTP client on shutdown."""
-    await app.state.http_client.aclose()
-
-async def get_http_client():
-    """Dependency to provide the shared HTTP client."""
-    return app.state.http_client
 
 from sonarr import router as sonarr_router
 from radarr import router as radarr_router

@@ -382,17 +382,10 @@ async def get_root_folders(
 # Helper function to get tag map
 async def get_tag_map(instance_config: dict, http_request: Request) -> dict:
     """Get a mapping of tag IDs to tag names."""
-    client: httpx.AsyncClient = http_request.app.state.http_client
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-
-    response = await client.get(url, headers=headers)
-    
-    if response.status_code != 200:
+    tags = await radarr_api_call(instance_config, "tag", http_request)
+    if not tags:
         return {}
-    
-    tags = response.json()
-    return {tag['id']: tag['label'] for tag in tags}
+    return {tag["id"]: tag["label"] for tag in tags}
 
 # Tag management endpoints
 @router.get("/radarr/tags", summary="Get all tags from Radarr", operation_id="radarr_get_tags")
@@ -401,19 +394,7 @@ async def get_tags(
     instance_config: dict = Depends(get_radarr_instance),
 ):
     """Get all tags configured in Radarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    client: httpx.AsyncClient = http_request.app.state.http_client
-    response = await client.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to fetch tags: {response.text}"
-        )
-    
-    return response.json()
+    return await radarr_api_call(instance_config, "tag", http_request)
 
 @router.post("/radarr/tags", summary="Create a new tag in Radarr", operation_id="radarr_create_tag", tags=["internal-admin"]) 
 async def create_tag(
@@ -422,20 +403,15 @@ async def create_tag(
     instance_config: dict = Depends(get_radarr_instance),
 ):
     """Create a new tag in Radarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
     payload = {"label": label}
-    
-    client: httpx.AsyncClient = http_request.app.state.http_client
-    response = await client.post(url, json=payload, headers=headers)
-    
-    if response.status_code != 201:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to create tag: {response.text}"
-        )
-    
-    return response.json()
+    created = await radarr_api_call(
+        instance_config,
+        "tag",
+        http_request,
+        method="POST",
+        json_data=payload,
+    )
+    return created
 
 @router.put("/movie/{movie_id}/monitor", status_code=200, summary="Update monitoring status for a movie", operation_id="monitor_radarr_movie", tags=["internal-admin"])
 async def monitor_movie(

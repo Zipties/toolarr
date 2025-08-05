@@ -322,17 +322,10 @@ async def get_quality_profiles(
 # Helper function to get tag map
 async def get_tag_map(instance_config: dict, request: Request) -> dict:
     """Get a mapping of tag IDs to tag names."""
-    client: httpx.AsyncClient = request.app.state.http_client
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-
-    response = await client.get(url, headers=headers)
-    
-    if response.status_code != 200:
+    tags = await sonarr_api_call(instance_config, "tag", request)
+    if not tags:
         return {}
-    
-    tags = response.json()
-    return {tag['id']: tag['label'] for tag in tags}
+    return {tag["id"]: tag["label"] for tag in tags}
 
 # Update the library search to include tag names
 @router.get("/library/with-tags", summary="Find TV SHOW with tag names", operation_id="series_with_tags")
@@ -364,19 +357,7 @@ async def get_tags(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
     """Get all tags configured in Sonarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    client: httpx.AsyncClient = http_request.app.state.http_client
-    response = await client.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to fetch tags: {response.text}"
-        )
-    
-    return response.json()
+    return await sonarr_api_call(instance_config, "tag", http_request)
 
 @router.post("/sonarr/tags", summary="Create a new tag in Sonarr", operation_id="sonarr_create_tag", tags=["internal-admin"])
 async def create_tag(
@@ -385,20 +366,15 @@ async def create_tag(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
     """Create a new tag in Sonarr."""
-    url = f"{instance_config['url']}/api/v3/tag"
-    headers = {"X-Api-Key": instance_config["api_key"]}
     payload = {"label": label}
-    
-    client: httpx.AsyncClient = request.app.state.http_client
-    response = await client.post(url, json=payload, headers=headers)
-    
-    if response.status_code != 201:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to create tag: {response.text}"
-        )
-    
-    return response.json()
+    created = await sonarr_api_call(
+        instance_config,
+        "tag",
+        request,
+        method="POST",
+        json_data=payload,
+    )
+    return created
 
 @router.delete("/sonarr/tags/{tag_id}", status_code=204, operation_id="delete_sonarr_tag", summary="Delete a tag from Sonarr", tags=["internal-admin"])
 async def delete_tag(
@@ -407,21 +383,20 @@ async def delete_tag(
     instance_config: dict = Depends(get_sonarr_instance),
 ):
     """Delete a tag from Sonarr by its ID."""
-    url = f"{instance_config['url']}/api/v3/tag/{tag_id}"
-    headers = {"X-Api-Key": instance_config["api_key"]}
-    
-    client: httpx.AsyncClient = request.app.state.http_client
-    response = await client.delete(url, headers=headers)
-    if response.status_code == 404:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tag with ID {tag_id} not found",
+    try:
+        await sonarr_api_call(
+            instance_config,
+            f"tag/{tag_id}",
+            request,
+            method="DELETE",
         )
-    elif response.status_code != 200 and response.status_code != 204:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Failed to delete tag: {response.text}"
-        )
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tag with ID {tag_id} not found",
+            ) from e
+        raise
 
 
 
