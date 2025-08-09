@@ -319,6 +319,15 @@ async def get_quality_profiles(
     return await sonarr_api_call(instance, "qualityprofile", request)
 
 
+@router.get("/rootfolders", operation_id="get_sonarr_rootfolders", summary="Get root folders from Sonarr")
+async def get_root_folders(
+    request: Request,
+    instance: dict = Depends(get_sonarr_instance),
+):
+    """Get all configured root folders in Sonarr."""
+    return await sonarr_api_call(instance, "rootfolder", request)
+
+
 # Helper function to get tag map
 async def get_tag_map(instance_config: dict, request: Request) -> dict:
     """Get a mapping of tag IDs to tag names."""
