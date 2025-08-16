@@ -1,9 +1,12 @@
 import os
 import json
-from fastapi import FastAPI, Depends, HTTPException
+import asyncio
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from instance_endpoints import instances_router
 
@@ -85,4 +88,64 @@ async def get_pruned_openapi():
             return json.load(f)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="OpenAPI spec not found")
+
+# --- MCP Integration ---
+from mcp_server import mcp_server
+# Use auto-generated MCP tools (fallback to manual if not available)
+try:
+    from mcp_tools_generated import register_all_tools
+    print("🔄 Using auto-generated MCP tools")
+except ImportError:
+    from mcp_tools import register_all_tools
+    print("⚠️  Using manual MCP tools (run generate_openapi.py to auto-generate)")
+
+# Register MCP tools on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize MCP tools on server startup"""
+    await register_all_tools()
+
+@app.post("/mcp", tags=["mcp"])
+async def mcp_endpoint(request: Request, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    """
+    Model Context Protocol (MCP) JSON-RPC endpoint.
+    Supports standard MCP protocol for AI model integration.
+    """
+    verify_api_key(credentials)
+    
+    try:
+        request_data = await request.json()
+        response = await mcp_server.handle_jsonrpc_request(request_data, credentials)
+        return response
+    except json.JSONDecodeError:
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32700, "message": "Parse error"}
+        }
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0", 
+            "id": None,
+            "error": {"code": -32603, "message": "Internal error", "data": str(e)}
+        }
+
+@app.get("/mcp/sse", tags=["mcp"])
+async def mcp_sse_endpoint(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    """
+    Server-Sent Events endpoint for MCP real-time communication.
+    Provides streaming updates for long-running operations.
+    """
+    verify_api_key(credentials)
+    
+    async def event_generator():
+        # Keep connection alive and send periodic heartbeats
+        while True:
+            yield {
+                "event": "heartbeat",
+                "data": json.dumps({"timestamp": "heartbeat", "status": "connected"})
+            }
+            await asyncio.sleep(30)  # Send heartbeat every 30 seconds
+    
+    return EventSourceResponse(event_generator())
 
