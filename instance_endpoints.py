@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException
 import os
 
 # Create a separate router for instance management
-instances_router = APIRouter(tags=["instances"])
+# Add "internal-admin" to the tags list
+instances_router = APIRouter(tags=["instances", "internal-admin"])
 
 def get_radarr_instance(instance_name: str):
     """
