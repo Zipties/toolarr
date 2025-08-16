@@ -113,33 +113,12 @@ async def search_for_movie_upgrade(
 ):
     """Triggers a search for a movie to find a better quality version. This is a non-destructive action."""
     
-    # FINAL BUG FIX: Fetch all enabled indexers and explicitly include their IDs in the search command.
-    # This prevents the "Sequence contains no matching element" error by giving the Radarr API
-    # a precise list of indexers to use, bypassing the failing internal logic.
-    
-    # Step 1: Get all available indexers from Radarr.
-    all_indexers = await radarr_api_call(instance, "indexer", http_request)
-    if not all_indexers:
-        raise HTTPException(status_code=500, detail="Could not retrieve indexers from Radarr.")
-
-    # Step 2: Filter for enabled indexers to build the list of IDs.
-    enabled_indexer_ids = [
-        indexer["id"] for indexer in all_indexers if indexer.get("enableRss") and indexer.get("enableAutomaticSearch")
-    ]
-
-    if not enabled_indexer_ids:
-        raise HTTPException(status_code=400, detail="No indexers enabled for automatic search were found in Radarr.")
-
-    # Step 3: Construct the explicit command and send it.
+    # FINAL BUG FIX: The command name must be "MoviesSearch" (plural), not "MovieSearch".
     await radarr_api_call(
         instance,
         "command", http_request,
         method="POST",
-        json_data={
-            "name": "MovieSearch",
-            "movieIds": [movie_id],
-            "indexerIds": enabled_indexer_ids  # Explicitly provide the indexer IDs
-        },
+        json_data={"name": "MoviesSearch", "movieIds": [movie_id]},
     )
     
     return {"message": f"Triggered search for movie {movie_id}."}
