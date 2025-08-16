@@ -101,29 +101,48 @@ async def radarr_api_call(
         raise HTTPException(status_code=500,
                             detail=f"Error communicating with Radarr: {str(e)}")
 
-@router.get("/library/movies", response_model=List[Movie], operation_id="search_radarr_library_for_movies", summary="Search Radarr library for movies.")
-async def find_movie_in_library(
-    term: str,
+@router.post(
+    "/movie/{movie_id}/search",
+    summary="Search for a movie upgrade",
+    operation_id="search_for_movie_upgrade",
+)
+async def search_for_movie_upgrade(
+    movie_id: int,
     http_request: Request,
     instance: dict = Depends(get_radarr_instance),
 ):
-    """Searches the Radarr library for movies by a search term. Use this endpoint to find a movie's ID for other operations. The results include the movie ID, title, and quality profile."""
-    all_movies = await radarr_api_call(instance, "movie", http_request)
+    """Triggers a search for a movie to find a better quality version. This is a non-destructive action."""
     
-    # Get quality profiles to map IDs to names
-    quality_profiles = await radarr_api_call(instance, "qualityprofile", http_request)
-    quality_profile_map = {qp["id"]: qp["name"] for qp in quality_profiles}
+    # FINAL BUG FIX: Fetch all enabled indexers and explicitly include their IDs in the search command.
+    # This prevents the "Sequence contains no matching element" error by giving the Radarr API
+    # a precise list of indexers to use, bypassing the failing internal logic.
     
-    # Filter movies and add quality profile name
-    filtered_movies = []
-    for m in all_movies:
-        if term.lower() in m.get("title", "").lower():
-            # Add quality profile name to the movie object
-            if "qualityProfileId" in m:
-                m["qualityProfileName"] = quality_profile_map.get(m["qualityProfileId"], "Unknown")
-            filtered_movies.append(m)
+    # Step 1: Get all available indexers from Radarr.
+    all_indexers = await radarr_api_call(instance, "indexer", http_request)
+    if not all_indexers:
+        raise HTTPException(status_code=500, detail="Could not retrieve indexers from Radarr.")
+
+    # Step 2: Filter for enabled indexers to build the list of IDs.
+    enabled_indexer_ids = [
+        indexer["id"] for indexer in all_indexers if indexer.get("enableRss") and indexer.get("enableAutomaticSearch")
+    ]
+
+    if not enabled_indexer_ids:
+        raise HTTPException(status_code=400, detail="No indexers enabled for automatic search were found in Radarr.")
+
+    # Step 3: Construct the explicit command and send it.
+    await radarr_api_call(
+        instance,
+        "command", http_request,
+        method="POST",
+        json_data={
+            "name": "MovieSearch",
+            "movieIds": [movie_id],
+            "indexerIds": enabled_indexer_ids  # Explicitly provide the indexer IDs
+        },
+    )
     
-    return filtered_movies
+    return {"message": f"Triggered search for movie {movie_id}."}
 
 @router.get("/lookup", summary="Search for a new movie to add to Radarr")
 async def lookup_movie(
