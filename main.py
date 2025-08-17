@@ -3,7 +3,7 @@ import json
 import asyncio
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
@@ -53,7 +53,11 @@ app.add_middleware(
 
 # --- Security ---
 TOOL_API_KEY = os.environ.get("TOOL_API_KEY", "")
+MCP_CLIENT_ID = os.environ.get("MCP_CLIENT_ID", "toolarr-client")
+MCP_CLIENT_SECRET = os.environ.get("MCP_CLIENT_SECRET", TOOL_API_KEY)  # Fallback to API key
+
 bearer_scheme = HTTPBearer()
+basic_scheme = HTTPBasic()
 
 def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     """Verify the Bearer token against the configured API key."""
@@ -62,7 +66,34 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
             status_code=403,
             detail="Invalid or missing Bearer token"
         )
-    return credentials.credentials
+
+async def verify_mcp_auth(request: Request):
+    """Verify authentication for MCP endpoint - supports both Bearer and Basic auth"""
+    # Try Bearer token first
+    auth_header = request.headers.get("authorization", "")
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]  # Remove "Bearer " prefix
+        if TOOL_API_KEY and token == TOOL_API_KEY:
+            return {"type": "bearer", "token": token}
+    
+    # Try Basic auth (OAuth client credentials)
+    elif auth_header.startswith("Basic "):
+        import base64
+        try:
+            credentials = base64.b64decode(auth_header[6:]).decode().split(":", 1)
+            if len(credentials) == 2:
+                username, password = credentials
+                if MCP_CLIENT_ID and MCP_CLIENT_SECRET:
+                    if username == MCP_CLIENT_ID and password == MCP_CLIENT_SECRET:
+                        return {"type": "basic", "username": username}
+        except Exception:
+            pass
+    
+    raise HTTPException(
+        status_code=403,
+        detail="Invalid authentication. Use Bearer token or OAuth client credentials."
+    )
 
 
 from sonarr import router as sonarr_router
@@ -106,16 +137,18 @@ async def startup_event():
     await register_all_tools()
 
 @app.post("/mcp", tags=["mcp"])
-async def mcp_endpoint(request: Request, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+async def mcp_endpoint(request: Request):
     """
     Model Context Protocol (MCP) JSON-RPC endpoint.
     Supports standard MCP protocol for AI model integration.
+    Supports both Bearer token and OAuth client credentials authentication.
     """
-    verify_api_key(credentials)
+    # Verify authentication
+    auth = await verify_mcp_auth(request)
     
     try:
         request_data = await request.json()
-        response = await mcp_server.handle_jsonrpc_request(request_data, credentials)
+        response = await mcp_server.handle_jsonrpc_request(request_data, None)  # Auth already verified
         return response
     except json.JSONDecodeError:
         return {
@@ -131,12 +164,14 @@ async def mcp_endpoint(request: Request, credentials: HTTPAuthorizationCredentia
         }
 
 @app.get("/mcp/sse", tags=["mcp"])
-async def mcp_sse_endpoint(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+async def mcp_sse_endpoint(request: Request):
     """
     Server-Sent Events endpoint for MCP real-time communication.
     Provides streaming updates for long-running operations.
+    Supports both Bearer token and OAuth client credentials authentication.
     """
-    verify_api_key(credentials)
+    # Verify authentication
+    auth = await verify_mcp_auth(request)
     
     async def event_generator():
         # Keep connection alive and send periodic heartbeats
