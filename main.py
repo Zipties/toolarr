@@ -115,6 +115,16 @@ async def root():
     """Basic health check endpoint."""
     return {"status": "healthy", "service": "toolarr-server"}
 
+@app.post("/debug-headers", tags=["debug"])
+async def debug_headers(request: Request):
+    """Debug endpoint to see all headers received by FastAPI"""
+    return {
+        "headers": dict(request.headers),
+        "method": request.method,
+        "url": str(request.url),
+        "client": request.client.host if request.client else None
+    }
+
 @app.get("/openapi-chatgpt.json", include_in_schema=False)
 async def get_pruned_openapi():
     """Serves the pruned OpenAPI spec for ChatGPT."""
