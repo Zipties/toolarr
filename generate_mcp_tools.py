@@ -217,7 +217,7 @@ async def register_sonarr_tools():
     mcp_server.register_tool(
         "{tool["tool_name"]}",
         "{tool["description"]}",
-        {json.dumps(tool["input_schema"], indent=8)},
+        {json.dumps(tool["input_schema"], indent=8).replace("true", "True").replace("false", "False")},
         lambda args, auth: {tool["function_name"]}(
             get_sonarr_instance(args.get("instance_name", "default")),
             *[args.get(param) for param in {list(tool["input_schema"]["properties"].keys())} if param != "instance_name"]
@@ -246,7 +246,7 @@ async def register_radarr_tools():
     mcp_server.register_tool(
         "{tool["tool_name"]}",
         "{tool["description"]}",
-        {json.dumps(tool["input_schema"], indent=8)},
+        {json.dumps(tool["input_schema"], indent=8).replace("true", "True").replace("false", "False")},
         lambda args, auth: {tool["function_name"]}(
             get_radarr_instance(args.get("instance_name", "default")),
             *[args.get(param) for param in {list(tool["input_schema"]["properties"].keys())} if param != "instance_name"]

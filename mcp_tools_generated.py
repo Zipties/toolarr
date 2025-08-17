@@ -203,7 +203,7 @@ async def register_sonarr_tools():
                 "removeFromClient": {
                         "type": "boolean",
                         "description": "",
-                        "default": true
+                        "default": True
                 }
         },
         "required": [
@@ -352,12 +352,12 @@ async def register_sonarr_tools():
                 "deleteFiles": {
                         "type": "boolean",
                         "description": "",
-                        "default": true
+                        "default": True
                 },
                 "addImportExclusion": {
                         "type": "boolean",
                         "description": "",
-                        "default": false
+                        "default": False
                 }
         },
         "required": [
@@ -636,7 +636,7 @@ async def register_radarr_tools():
                 "removeFromClient": {
                         "type": "boolean",
                         "description": "",
-                        "default": true
+                        "default": True
                 }
         },
         "required": [
@@ -695,12 +695,12 @@ async def register_radarr_tools():
                 "deleteFiles": {
                         "type": "boolean",
                         "description": "",
-                        "default": true
+                        "default": True
                 },
                 "addImportExclusion": {
                         "type": "boolean",
                         "description": "",
-                        "default": false
+                        "default": False
                 }
         },
         "required": [
