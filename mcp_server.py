@@ -41,6 +41,10 @@ class McpServer:
                 return await self._handle_list_tools(request)
             elif request.method == "tools/call":
                 return await self._handle_call_tool(request, auth_credentials)
+            elif request.method == "resources/list":
+                return await self._handle_list_resources(request)
+            elif request.method == "prompts/list":
+                return await self._handle_list_prompts(request)
             elif request.method == "ping":
                 return self._create_success_response(request.id, {})
             else:
@@ -76,6 +80,16 @@ class McpServer:
         tools_list = list(self.tools.values())
         result = McpListToolsResult(tools=tools_list)
         return self._create_success_response(request.id, result.model_dump())
+    
+    async def _handle_list_resources(self, request: JsonRpcRequest) -> Dict[str, Any]:
+        """Handle MCP resources/list request"""
+        # Return empty list since we don't have resources
+        return self._create_success_response(request.id, {"resources": []})
+    
+    async def _handle_list_prompts(self, request: JsonRpcRequest) -> Dict[str, Any]:
+        """Handle MCP prompts/list request"""
+        # Return empty list since we don't have prompts
+        return self._create_success_response(request.id, {"prompts": []})
     
     async def _handle_call_tool(self, request: JsonRpcRequest, 
                               auth_credentials: Optional[HTTPAuthorizationCredentials] = None) -> Dict[str, Any]:
