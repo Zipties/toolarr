@@ -72,46 +72,31 @@ async def verify_mcp_auth(request: Request):
     import base64
     
     auth_header = request.headers.get("authorization", "")
-    print(f"Debug: Auth header received: {auth_header[:50]}...", flush=True)
     
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]  # Remove "Bearer " prefix
-        print(f"Debug: Bearer token attempt", flush=True)
         if TOOL_API_KEY and token == TOOL_API_KEY:
-            print(f"Debug: Bearer token valid", flush=True)
             return {"type": "bearer", "token": token}
-        else:
-            print(f"Debug: Bearer token invalid", flush=True)
     
     # Try Basic auth (OAuth client credentials)
     elif auth_header.startswith("Basic "):
-        print(f"Debug: Basic auth attempt", flush=True)
         try:
             encoded_creds = auth_header[6:]  # Remove "Basic " prefix
             decoded_creds = base64.b64decode(encoded_creds).decode()
-            print(f"Debug: Decoded credentials: {decoded_creds}", flush=True)
             
             credentials = decoded_creds.split(":", 1)
             if len(credentials) == 2:
                 username, password = credentials
-                print(f"Debug: Username: {username}, Password: {password[:10]}...", flush=True)
-                print(f"Debug: Expected - ID: {MCP_CLIENT_ID}, Secret: {MCP_CLIENT_SECRET[:10]}...", flush=True)
                 
                 if MCP_CLIENT_ID and MCP_CLIENT_SECRET:
                     if username == MCP_CLIENT_ID and password == MCP_CLIENT_SECRET:
-                        print(f"Debug: Basic auth valid", flush=True)
                         return {"type": "basic", "username": username}
-                    else:
-                        print(f"Debug: Basic auth credentials mismatch", flush=True)
-        except Exception as e:
-            print(f"Debug: Basic auth error: {e}", flush=True)
-    else:
-        print(f"Debug: No recognized auth method", flush=True)
+        except Exception:
+            pass  # Fall through to authentication failure
     
-    print(f"Debug: Authentication failed", flush=True)
     raise HTTPException(
-        status_code=403,
-        detail=f"Invalid authentication. Auth header: {auth_header[:20]}..."
+        status_code=401,
+        detail="Invalid authentication credentials"
     )
 
 
