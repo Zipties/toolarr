@@ -5,7 +5,13 @@ Direct MCP server test without HTTP layer
 import asyncio
 import json
 from mcp_server import mcp_server
-from mcp_tools import register_all_tools
+# Use auto-generated MCP tools (fallback to manual if not available)
+try:
+    from mcp_tools_generated import register_all_tools
+    print("🔄 Using auto-generated MCP tools for testing")
+except ImportError:
+    from mcp_tools import register_all_tools
+    print("⚠️  Using manual MCP tools for testing")
 
 async def test_mcp_direct():
     """Test MCP server functionality directly"""

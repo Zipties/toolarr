@@ -59,7 +59,7 @@ After saving the configuration, restart Claude Desktop completely.
 
 ## Available Tools
 
-Once connected, Claude will have access to 18+ tools for managing your Sonarr and Radarr instances:
+Once connected, Claude will have access to **31 tools** for managing your Sonarr and Radarr instances:
 
 ### Sonarr Tools
 - `get_sonarr_episodes` - Get episodes for a TV series
