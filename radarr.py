@@ -425,27 +425,6 @@ async def monitor_movie(
     return updated_movie
 
 
-@router.post(
-    "/movie/{movie_id}/search",
-    summary="Search for a movie upgrade",
-    operation_id="search_for_movie_upgrade",
-)
-async def search_for_movie_upgrade(
-    movie_id: int,
-    http_request: Request,
-    instance: dict = Depends(get_radarr_instance),
-):
-    """Triggers a search for a movie to find a better quality version. This is a non-destructive action."""
-    # BUG FIX: Added "files": [] to the payload to provide more context to the Radarr API
-    # and prevent the 'Sequence contains no matching element' error.
-    await radarr_api_call(
-        instance,
-        "command", http_request,
-        method="POST",
-        json_data={"name": "MovieSearch", "movieIds": [movie_id], "files": []},
-    )
-    return {"message": f"Triggered search for movie {movie_id}."}
-
 
 @router.post("/movie/{movie_id}/fix", response_model=Movie, summary="Replace a damaged movie file", operation_id="fix_radarr_movie")
 async def fix_movie(
