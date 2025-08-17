@@ -30,6 +30,13 @@ COPY radarr.py .
 COPY prune_openapi.py .
 COPY generate_openapi.py .
 
+# Copy MCP integration files
+COPY mcp_server.py .
+COPY mcp_tools.py .
+COPY mcp_tools_generated.py .
+COPY mcp_types.py .
+COPY generate_mcp_tools.py .
+
 # Include the generated specs
 COPY --from=builder /app/openapi.json .
 COPY --from=builder /app/openapi-chatgpt.json .
