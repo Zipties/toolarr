@@ -9,7 +9,17 @@
 
 ## Setup Instructions
 
-### Option 1: Use Claude Desktop UI (Recommended)
+### Option 1: Use Claude Desktop UI - OAuth Client Credentials (Recommended)
+
+1. **Open Claude Desktop Settings**
+2. **Navigate to MCP Servers section**
+3. **Add New Server** with these details:
+   - **Server URL**: `https://toolarr.moderncaveman.us/mcp`
+   - **Authentication Type**: OAuth Client Credentials
+   - **Client ID**: `toolarr-client`
+   - **Client Secret**: `b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0`
+
+### Option 2: Use Claude Desktop UI - Bearer Token (Alternative)
 
 1. **Open Claude Desktop Settings**
 2. **Navigate to MCP Servers section**
@@ -18,7 +28,7 @@
    - **Authentication Type**: Bearer Token
    - **Token**: `b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0`
 
-### Option 2: Configuration File Method
+### Option 3: Configuration File Method
 
 If Claude Desktop doesn't have UI support yet, add this to your config file:
 
@@ -26,6 +36,23 @@ If Claude Desktop doesn't have UI support yet, add this to your config file:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
+**OAuth Client Credentials (Recommended):**
+```json
+{
+  "mcpServers": {
+    "toolarr": {
+      "url": "https://toolarr.moderncaveman.us/mcp",
+      "auth": {
+        "type": "oauth_client_credentials",
+        "client_id": "toolarr-client",
+        "client_secret": "b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0"
+      }
+    }
+  }
+}
+```
+
+**Bearer Token (Alternative):**
 ```json
 {
   "mcpServers": {
@@ -42,13 +69,18 @@ If Claude Desktop doesn't have UI support yet, add this to your config file:
 
 ## Authentication
 
-Your server uses **Bearer Token** authentication:
+Your server supports **both** authentication methods:
 
-### Bearer Token Authentication
+### 1. OAuth Client Credentials (Recommended)
+- **Client ID**: `toolarr-client`
+- **Client Secret**: `b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0`
+- **Authorization Header**: `Basic dG9vbGFyci1jbGllbnQ6YjM5NzVmNzFhZjE4ZTgyMmQxYTAxOWY1Mzk5OWM5MmYxMzEwOWVjMzliMzhmNTA4MzljYjQwOGMwYTkwZGZhMA==`
+
+### 2. Bearer Token (Alternative)
 - **Token**: `b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0`
 - **Authorization Header**: `Bearer b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0`
 
-*Note: OAuth client credentials are also supported server-side but may have proxy compatibility issues.*
+**Both methods are fully functional through Traefik and direct connection!**
 
 ## Available Tools
 
@@ -83,7 +115,13 @@ Once connected, Claude will have access to **31 tools**:
 
 ### Manual Test (Optional)
 ```bash
-# Test Bearer token authentication
+# Test OAuth Client Credentials authentication
+curl -X POST https://toolarr.moderncaveman.us/mcp \
+  -H "Content-Type: application/json" \
+  -u "toolarr-client:b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "ping"}'
+
+# Test Bearer token authentication (alternative)
 curl -X POST https://toolarr.moderncaveman.us/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer b3975f71af18e822d1a019f53999c92f13109ec39b38f50839cb408c0a90dfa0" \
