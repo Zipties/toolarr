@@ -76,7 +76,13 @@ def register_radarr_tools(server, client: RadarrClient):
             if movie_id is None:
                 return {"success": False, "error": "movie_id parameter is required"}
 
-            movie = await client.get_movie(int(movie_id))
+            # Validate type
+            try:
+                movie_id = int(movie_id)
+            except (ValueError, TypeError):
+                return {"success": False, "error": f"movie_id must be an integer, got: {type(movie_id).__name__}"}
+
+            movie = await client.get_movie(movie_id)
             return {
                 "success": True,
                 "movie": movie
@@ -109,10 +115,21 @@ def register_radarr_tools(server, client: RadarrClient):
             quality_profile_id = args.get("quality_profile_id")
             root_folder_path = args.get("root_folder_path")
 
-            if not all([tmdb_id, title, quality_profile_id, root_folder_path]):
+            # Check for None specifically (0 is a valid value for IDs)
+            missing = []
+            if tmdb_id is None:
+                missing.append("tmdb_id")
+            if title is None:
+                missing.append("title")
+            if quality_profile_id is None:
+                missing.append("quality_profile_id")
+            if root_folder_path is None:
+                missing.append("root_folder_path")
+
+            if missing:
                 return {
                     "success": False,
-                    "error": "Missing required fields: tmdb_id, title, quality_profile_id, root_folder_path"
+                    "error": f"Missing required fields: {', '.join(missing)}"
                 }
 
             # Build movie data

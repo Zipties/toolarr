@@ -109,10 +109,21 @@ def register_sonarr_tools(server, client: SonarrClient):
             quality_profile_id = args.get("quality_profile_id")
             root_folder_path = args.get("root_folder_path")
 
-            if not all([tvdb_id, title, quality_profile_id, root_folder_path]):
+            # Check for None specifically (0 is a valid value for IDs)
+            missing = []
+            if tvdb_id is None:
+                missing.append("tvdb_id")
+            if title is None:
+                missing.append("title")
+            if quality_profile_id is None:
+                missing.append("quality_profile_id")
+            if root_folder_path is None:
+                missing.append("root_folder_path")
+
+            if missing:
                 return {
                     "success": False,
-                    "error": "Missing required fields: tvdb_id, title, quality_profile_id, root_folder_path"
+                    "error": f"Missing required fields: {', '.join(missing)}"
                 }
 
             # Build series data
