@@ -312,28 +312,52 @@ def mcp_tool(name: str, description: str, parameters: Dict[str, Any]):
 
 async def main():
     """Main entry point for the MCP server."""
+    import os
+    from backends.sonarr_client import SonarrClient
+    from backends.radarr_client import RadarrClient
+    from tools import register_sonarr_tools, register_radarr_tools
+
+    # Load configuration from environment
+    sonarr_url = os.getenv("SONARR_URL")
+    sonarr_api_key = os.getenv("SONARR_API_KEY")
+    radarr_url = os.getenv("RADARR_URL")
+    radarr_api_key = os.getenv("RADARR_API_KEY")
+
+    if not all([sonarr_url, sonarr_api_key, radarr_url, radarr_api_key]):
+        logger.error("Missing required environment variables:")
+        logger.error("  SONARR_URL, SONARR_API_KEY, RADARR_URL, RADARR_API_KEY")
+        logger.error("Please set these environment variables before starting the server.")
+        sys.exit(1)
+
+    logger.info(f"Sonarr URL: {sonarr_url}")
+    logger.info(f"Radarr URL: {radarr_url}")
+
+    # Initialize clients
+    sonarr_client = SonarrClient(base_url=sonarr_url, api_key=sonarr_api_key)
+    radarr_client = RadarrClient(base_url=radarr_url, api_key=radarr_api_key)
+
+    # Create server
     server = McpServerV2()
 
-    # TODO: Register tools here
-    # For now, register a placeholder tool
+    try:
+        # Register tools
+        logger.info("Registering Sonarr tools...")
+        register_sonarr_tools(server, sonarr_client)
 
-    @mcp_tool(
-        name="ping",
-        description="Health check - returns pong",
-        parameters={"type": "object", "properties": {}}
-    )
-    async def ping_tool(args: Dict[str, Any]):
-        return {"status": "pong", "message": "Toolarr MCP server is running"}
+        logger.info("Registering Radarr tools...")
+        register_radarr_tools(server, radarr_client)
 
-    server.register_tool(
-        ping_tool._mcp_name,
-        ping_tool._mcp_description,
-        ping_tool._mcp_parameters,
-        ping_tool
-    )
+        logger.info(f"Registered {len(server.tools)} tools total")
 
-    # Run the server
-    await server.run()
+        # Run the server
+        await server.run()
+
+    finally:
+        # Cleanup
+        logger.info("Shutting down and closing clients...")
+        await sonarr_client.close()
+        await radarr_client.close()
+        logger.info("Cleanup complete")
 
 
 if __name__ == "__main__":

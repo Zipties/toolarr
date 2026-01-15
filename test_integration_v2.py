@@ -83,14 +83,30 @@ async def test_mcp_server():
     print("\n=== Testing MCP Server ===")
 
     try:
-        from mcp_server_v2 import MCPServer
+        from mcp_server_v2 import McpServerV2
+        from backends.sonarr_client import SonarrClient
+        from backends.radarr_client import RadarrClient
+        from tools import register_sonarr_tools, register_radarr_tools
     except ImportError as e:
         print(f"❌ Import failed: {e}")
         print("   MCP server not ready yet")
         return False
 
     try:
-        server = MCPServer()
+        # Create server and clients
+        server = McpServerV2()
+        sonarr_client = SonarrClient(
+            base_url=os.getenv("SONARR_URL", "http://192.168.45.15:8083"),
+            api_key=os.getenv("SONARR_API_KEY", "7ce61d72c943483ca03864e03f013127")
+        )
+        radarr_client = RadarrClient(
+            base_url=os.getenv("RADARR_URL", "http://192.168.45.15:5051"),
+            api_key=os.getenv("RADARR_API_KEY", "d81da54eab704db0aa2d4e1d66cd697a")
+        )
+
+        # Register tools
+        register_sonarr_tools(server, sonarr_client)
+        register_radarr_tools(server, radarr_client)
 
         # Test initialize
         init_response = await server.handle_request({
@@ -115,17 +131,14 @@ async def test_mcp_server():
         tools = list_response.get("result", {}).get("tools", [])
         print(f"  ✅ tools/list: {len(tools)} tools registered")
 
-        # Test ping
-        ping_response = await server.handle_request({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "ping",
-            "params": {}
-        })
-        print(f"  ✅ ping: responded")
+        # Cleanup
+        await sonarr_client.close()
+        await radarr_client.close()
 
     except Exception as e:
         print(f"  ❌ MCP server error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
     return True
@@ -136,14 +149,29 @@ async def test_tool_execution():
     print("\n=== Testing Tool Execution ===")
 
     try:
-        from mcp_server_v2 import MCPServer
+        from mcp_server_v2 import McpServerV2
+        from backends.sonarr_client import SonarrClient
+        from backends.radarr_client import RadarrClient
+        from tools import register_sonarr_tools, register_radarr_tools
     except ImportError:
         print("❌ MCP server not ready")
         return False
 
     try:
-        server = MCPServer()
-        await server.initialize_backends()
+        # Create server and clients
+        server = McpServerV2()
+        sonarr_client = SonarrClient(
+            base_url=os.getenv("SONARR_URL", "http://192.168.45.15:8083"),
+            api_key=os.getenv("SONARR_API_KEY", "7ce61d72c943483ca03864e03f013127")
+        )
+        radarr_client = RadarrClient(
+            base_url=os.getenv("RADARR_URL", "http://192.168.45.15:5051"),
+            api_key=os.getenv("RADARR_API_KEY", "d81da54eab704db0aa2d4e1d66cd697a")
+        )
+
+        # Register tools
+        register_sonarr_tools(server, sonarr_client)
+        register_radarr_tools(server, radarr_client)
 
         # Test sonarr_list_series
         response = await server.handle_request({
@@ -190,6 +218,10 @@ async def test_tool_execution():
             print(f"  ❌ radarr_list_movies: {response['error']}")
         else:
             print(f"  ✅ radarr_list_movies: executed")
+
+        # Cleanup
+        await sonarr_client.close()
+        await radarr_client.close()
 
     except Exception as e:
         print(f"  ❌ Tool execution error: {e}")
